@@ -65,6 +65,18 @@
 
               <div class="col-12 col-sm-6 col-md-4">
                 <q-input
+                  v-model.number="form.degustacao_tele"
+                  :rules="[naoNegativo]"
+                  label="Telemedicina"
+                  type="number"
+                  min="0"
+                  lazy-rules
+                  outlined
+                />
+              </div>
+
+              <div class="col-12 col-sm-6 col-md-4">
+                <q-input
                   v-model.number="form.leads"
                   :rules="[naoNegativo]"
                   label="Leads"
@@ -121,7 +133,14 @@
                     <q-input v-model="novoPonto.telefone" :rules="[obrigatorio]" label="Telefone" type="tel" lazy-rules outlined />
                   </div>
                   <div class="col-12 col-sm-4">
-                    <q-input v-model="novoPonto.tipo" :rules="[obrigatorio]" label="Tipo" lazy-rules outlined />
+                    <q-select
+                      v-model="novoPonto.tipo"
+                      :options="tiposPonto"
+                      :rules="[obrigatorio]"
+                      label="Tipo"
+                      lazy-rules
+                      outlined
+                    />
                   </div>
                   <div class="col-12">
                     <q-input v-model="novoPonto.endereco" :rules="[obrigatorio]" label="Endereço" lazy-rules outlined />
@@ -185,7 +204,9 @@
               <q-td :props="props">
                 <div class="pa-ponto-nome">{{ props.row.pontoNome }}</div>
                 <div class="pa-label">{{ props.row.endereco }}</div>
-                <div class="pa-label">{{ props.row.telefone }}</div>
+                <div class="pa-label">
+                  <WhatsAppContact :phone="props.row.telefone" />
+                </div>
               </q-td>
             </template>
 
@@ -197,9 +218,21 @@
               </q-td>
             </template>
 
+            <template v-slot:body-cell-degustacao_tele="props">
+              <q-td :props="props" class="text-center">
+                {{ props.row.degustacao_tele ?? 0 }}
+              </q-td>
+            </template>
+
             <template v-slot:body-cell-acoes="props">
               <q-td :props="props">
+                <EditButton
+                  v-if="podeAlterarAcao(props.row)"
+                  label="Editar ação"
+                  @click="abrirEdicaoAcao(props.row)"
+                />
                 <DeleteButton
+                  v-if="podeAlterarAcao(props.row)"
                   label="Excluir ação"
                   @click="confirmarExclusao(props.row._id)"
                 />
@@ -209,8 +242,99 @@
           </q-table>
         </div>
       </div>
-
     </div>
+
+    <q-dialog v-model="dialogEdicaoAcao" persistent>
+      <q-card class="pa-dialog">
+        <q-form @submit.prevent="salvarEdicaoAcao">
+          <q-card-section>
+            <div class="pa-secao-titulo">Editar ação</div>
+          </q-card-section>
+
+          <q-card-section class="q-pt-none">
+            <div class="row q-col-gutter-md">
+              <div class="col-12">
+                <q-select
+                  v-model="acaoEmEdicao.pontoId"
+                  :options="pontosFiltrados"
+                  :loading="carregandoPontos"
+                  :rules="[obrigatorio]"
+                  label="Ponto de venda"
+                  option-label="label"
+                  option-value="value"
+                  emit-value
+                  map-options
+                  use-input
+                  hide-selected
+                  fill-input
+                  input-debounce="0"
+                  lazy-rules
+                  outlined
+                  @filter="filtrarPontos"
+                >
+                  <template v-slot:no-option>
+                    <q-item>
+                      <q-item-section class="text-grey">Nenhum ponto encontrado</q-item-section>
+                    </q-item>
+                  </template>
+                </q-select>
+              </div>
+              <div class="col-12 col-md-6">
+                <q-input
+                  v-model="acaoEmEdicao.data"
+                  :rules="[obrigatorio]"
+                  label="Data da ação"
+                  type="date"
+                  min="2023-01-01"
+                  :max="hoje"
+                  stack-label
+                  lazy-rules
+                  outlined
+                />
+              </div>
+              <div class="col-12 col-sm-6 col-md-3">
+                <q-input
+                  v-model.number="acaoEmEdicao.leads"
+                  :rules="[naoNegativo]"
+                  label="Leads"
+                  type="number"
+                  min="0"
+                  lazy-rules
+                  outlined
+                />
+              </div>
+              <div class="col-12 col-sm-6 col-md-3">
+                <q-input
+                  v-model.number="acaoEmEdicao.vendas"
+                  :rules="[naoNegativo]"
+                  label="Vendas"
+                  type="number"
+                  min="0"
+                  lazy-rules
+                  outlined
+                />
+              </div>
+              <div class="col-12 col-sm-6 col-md-4">
+                <q-input
+                  v-model.number="acaoEmEdicao.degustacao_tele"
+                  :rules="[naoNegativo]"
+                  label="Telemedicina"
+                  type="number"
+                  min="0"
+                  lazy-rules
+                  outlined
+                />
+              </div>
+            </div>
+          </q-card-section>
+
+          <q-card-actions align="right" class="q-pa-md">
+            <q-btn flat no-caps color="grey-8" label="Cancelar" :disable="salvandoEdicaoAcao" @click="dialogEdicaoAcao = false" />
+            <q-btn unelevated no-caps color="primary" label="Salvar alterações" type="submit" :loading="salvandoEdicaoAcao" />
+          </q-card-actions>
+        </q-form>
+      </q-card>
+    </q-dialog>
 
     <ConfirmDialog
       v-model="dialogExclusao"
@@ -228,10 +352,14 @@
 import { ref, computed, nextTick, onMounted } from 'vue';
 import ConfirmDialog from 'src/components/ConfirmDialog.vue';
 import DeleteButton from 'src/components/DeleteButton.vue';
+import EditButton from 'src/components/EditButton.vue';
+import WhatsAppContact from 'src/components/WhatsAppContact.vue';
 import { useQuasar } from 'quasar';
 import { useRoute } from 'vue-router';
 import { apiFetch } from 'src/services/api';
 import { notificar } from 'src/services/notificacoes';
+import { tiposPonto } from 'src/constants/tiposPonto';
+import { getUser, temPapel } from 'src/services/auth';
 
 const $q = useQuasar();
 const route = useRoute();
@@ -240,8 +368,12 @@ const pontos = ref([]);
 const erroPontos = ref(false);
 const dialogExclusao = ref(false);
 const acaoSelecionada = ref(null);
+const dialogEdicaoAcao = ref(false);
+const salvandoEdicaoAcao = ref(false);
+const acaoEmEdicao = ref(criarAcaoVazia());
+const usuarioAtual = getUser();
 const hoje = formatarDataInput(new Date());
-const form = ref({ pontoId: '', data: hoje, leads: 0, vendas: 0 });
+const form = ref({ pontoId: '', data: hoje, leads: 0, vendas: 0, degustacao_tele: 0 });
 const formRef = ref(null);
 const addNewPonto = ref(false);
 const novoPonto = ref({ nome: '', telefone: '', endereco: '', bairro: '', cidade: '', tipo: '' });
@@ -256,10 +388,79 @@ function avisar(tipo, message) {
   notificar($q, tipo, message);
 }
 
-const isHistory = computed(() => route.path === '/app/historico-acoes');
+function abrirEdicaoAcao(acao) {
+  acaoEmEdicao.value = {
+    ...acao,
+    data: String(acao.data || '').match(/^\d{4}-\d{2}-\d{2}/)?.[0] || '',
+    leads: acao.leads ?? '',
+    vendas: acao.vendas ?? '',
+    degustacao_tele: acao.degustacao_tele ?? 0,
+  };
+  dialogEdicaoAcao.value = true;
+}
 
-const obrigatorio = (val) => !!val || 'Campo obrigatório';
-const naoNegativo = (val) => (val !== '' && val !== null && val >= 0) || 'Informe 0 ou mais';
+async function salvarEdicaoAcao() {
+  salvandoEdicaoAcao.value = true;
+
+  try {
+    const { _id, pontoId, data, leads, vendas, degustacao_tele } = acaoEmEdicao.value;
+    const payload = {
+      pontoId,
+      data,
+      leads: Number(leads),
+      vendas: Number(vendas),
+      degustacao_tele: Number(degustacao_tele),
+    };
+    const response = await apiFetch(`/acoes/${_id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      throw new Error(await mensagemErroResposta(response, 'Não foi possível atualizar a ação'));
+    }
+
+    const acaoAtualizada = await response.json();
+    acoes.value = acoes.value.map((acao) => acao._id === _id ? acaoAtualizada : acao);
+    dialogEdicaoAcao.value = false;
+    avisar('sucesso', 'Ação atualizada com sucesso.');
+  } catch (error) {
+    console.error('Erro ao atualizar ação:', error);
+    avisar('erro', error.message || 'Não foi possível atualizar a ação.');
+  } finally {
+    salvandoEdicaoAcao.value = false;
+  }
+}
+
+const isHistory = computed(() => route.path === '/app/historico-acoes');
+const podeAlterarAcao = (acao) =>
+  temPapel('gestor') ||
+  (temPapel('colaborador') && String(acao.usuarioId || '') === String(usuarioAtual?.id || ''));
+
+const obrigatorio = (val) =>
+  (typeof val === 'string' ? val.trim().length > 0 : val !== null && val !== undefined) || 'Campo obrigatório';
+const naoNegativo = (val) =>
+  (val !== '' && val !== null && val !== undefined &&
+    !(typeof val === 'string' && val.trim().length === 0) &&
+    Number.isFinite(Number(val)) && Number(val) >= 0) ||
+  'Informe 0 ou mais';
+
+function criarAcaoVazia() {
+  return { _id: '', pontoId: '', data: '', leads: '', vendas: '', degustacao_tele: 0 };
+}
+
+async function mensagemErroResposta(response, fallback) {
+  let body = null;
+  try {
+    body = await response.clone().json();
+  } catch {
+    // The API may return a non-JSON 404 for an unregistered route.
+  }
+
+  return body?.error || body?.erro || body?.message ||
+    `${fallback} (HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ''}).`;
+}
 
 const pontosOptions = computed(() =>
   [...pontos.value]
@@ -344,6 +545,12 @@ const columns = [
     align: 'center',
   },
   {
+    name: 'degustacao_tele',
+    label: 'Telemedicina',
+    field: 'degustacao_tele',
+    align: 'center',
+  },
+  {
     name: 'vendas',
     label: 'Vendas',
     field: 'vendas',
@@ -358,7 +565,7 @@ const columns = [
 ];
 
 function resetForm() {
-  form.value = { pontoId: '', data: hoje, leads: 0, vendas: 0 };
+  form.value = { pontoId: '', data: hoje, leads: 0, vendas: 0, degustacao_tele: 0 };
   addNewPonto.value = false;
   novoPonto.value = { nome: '', telefone: '', endereco: '', bairro: '', cidade: '', tipo: '' };
   nextTick(() => formRef.value?.resetValidation());
@@ -416,13 +623,13 @@ async function carregarPontos() {
   try {
     const response = await apiFetch('/pontos');
     if (!response.ok) {
-      throw new Error('Falha ao carregar pontos');
+      throw new Error(await mensagemErroResposta(response, 'Falha ao carregar pontos'));
     }
     pontos.value = await response.json();
   } catch (error) {
     erroPontos.value = true;
-    console.error(error);
-    avisar('erro', 'Não foi possível carregar a lista de pontos.');
+    console.error('Erro ao carregar pontos:', error);
+    avisar('erro', error.message || 'Não foi possível carregar a lista de pontos.');
   } finally {
     carregandoPontos.value = false;
   }
@@ -432,12 +639,12 @@ async function carregarAcoes() {
   try {
     const response = await apiFetch('/acoes');
     if (!response.ok) {
-      throw new Error('Falha ao carregar histórico');
+      throw new Error(await mensagemErroResposta(response, 'Falha ao carregar histórico'));
     }
     acoes.value = await response.json();
   } catch (error) {
-    console.error(error);
-    avisar('erro', 'Não foi possível carregar o histórico de ações.');
+    console.error('Erro ao carregar histórico:', error);
+    avisar('erro', error.message || 'Não foi possível carregar o histórico de ações.');
   } finally {
     carregandoAcoes.value = false;
   }
@@ -459,13 +666,13 @@ async function excluirAcao(id){
         method: 'DELETE',
         });
         if (!response.ok) {
-        throw new Error('Falha ao excluir ação');
+          throw new Error(await mensagemErroResposta(response, 'Não foi possível excluir a ação'));
         }
         acoes.value = acoes.value.filter((a) => a._id !== id);
         avisar('sucesso', 'Ação excluída com sucesso.');
     } catch (error) {
-        console.error(error);
-        avisar('erro', 'Não foi possível excluir a ação.');
+        console.error('Erro ao excluir ação:', error);
+        avisar('erro', error.message || 'Não foi possível excluir a ação.');
     }
 }
 
@@ -478,6 +685,7 @@ async function enviarAcao() {
       data: form.value.data,
       leads: Number(form.value.leads),
       vendas: Number(form.value.vendas),
+      degustacao_tele: Number(form.value.degustacao_tele),
     };
 
     const response = await apiFetch('/acoes', {

@@ -2,6 +2,7 @@ import { Acoes } from './modelAcao.js';
 import { Pontos } from './modelPonto.js';
 
 async function getDadosEmpresa(empresaId) {
+    if (!empresaId) throw new Error('empresaId obrigatório');
     const [acoes, pontos] = await Promise.all([
         Acoes.find({ empresaId }),
         Pontos.find({ empresaId })
@@ -21,11 +22,13 @@ export async function getResumo(empresaId) {
         const totalAcoes = acoes.length;
         const totalVendas = acoes.reduce((acc, a) => acc + a.vendas, 0);
         const totalLeads = acoes.reduce((acc, a) => acc + a.leads, 0);
+        const totalTelemedicina = acoes.reduce((acc, a) => acc + Number(a.degustacao_tele || 0), 0);
 
         return {
             totalAcoes,
             totalVendas,
-            totalLeads
+            totalLeads,
+            totalTelemedicina
         };
     } catch (error) {
         console.error('Erro ao buscar resumo:', error);
@@ -47,13 +50,15 @@ export async function getRanking(empresaId) {
                 agrupado[pontoIdStr] = {
                     totalVisitas: 0,
                     totalVendas: 0,
-                    totalLeads: 0
+                    totalLeads: 0,
+                    totalTelemedicina: 0
                 };
             }
 
             agrupado[pontoIdStr].totalVisitas++;
             agrupado[pontoIdStr].totalVendas += a.vendas;
             agrupado[pontoIdStr].totalLeads += a.leads;
+            agrupado[pontoIdStr].totalTelemedicina += Number(a.degustacao_tele || 0);
         });
 
         // Transformar em array + calcular médias
@@ -73,6 +78,11 @@ export async function getRanking(empresaId) {
                     ? 0
                     : dados.totalLeads / dados.totalVisitas;
 
+            const mediaTelemedicina =
+                dados.totalVisitas === 0
+                    ? 0
+                    : dados.totalTelemedicina / dados.totalVisitas;
+
             return {
                 pontoId,
 
@@ -86,10 +96,13 @@ export async function getRanking(empresaId) {
 
                 cidade: ponto?.cidade || '',
 
+                tipo: ponto?.tipo || '',
+
                 ...dados,
 
                 mediaVendas,
-                mediaLeads
+                mediaLeads,
+                mediaTelemedicina
             };
         });
 

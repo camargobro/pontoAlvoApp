@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "start": "node ./bin/www",
-    "dev": "nodemon ./bin/www"
+    "dev": "nodemon ./bin/www",
+    "migrar:empresas": "node ./scripts/migrarEmpresas.js",
+    "criar:admin": "node ./scripts/criarAdmin.js"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",
@@ -15,6 +17,7 @@
     "dotenv": "^17.4.1",
     "exceljs": "^4.3.0",
     "express": "~4.16.1",
+    "express-rate-limit": "^8.7.3",
     "http-errors": "~1.6.3",
     "jade": "~1.11.0",
     "jsonwebtoken": "^9.0.3",

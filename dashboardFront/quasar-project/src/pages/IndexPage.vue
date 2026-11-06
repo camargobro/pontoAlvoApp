@@ -8,14 +8,14 @@
       </header>
 
       <q-banner v-if="erro" rounded class="bg-red-1 text-negative q-mb-lg">
-        Não foi possível carregar os dados. O servidor pode estar iniciando, tente novamente em instantes.
+        {{ erroMensagem || 'Não foi possível carregar os dados. Tente novamente em instantes.' }}
         <template v-slot:action>
           <q-btn flat color="negative" label="Tentar novamente" @click="buscarDados" />
         </template>
       </q-banner>
 
       <div class="row q-col-gutter-md q-mb-lg">
-        <div v-for="item in resumo" :key="item.label" class="col-12 col-sm-4">
+        <div v-for="item in resumo" :key="item.label" class="col-12 col-sm-6 col-md-3">
           <div class="pa-card">
             <div class="pa-label">{{ item.label }}</div>
             <div class="pa-numero">
@@ -42,7 +42,9 @@
                 <template v-else>
                   <div class="pa-ponto-nome">{{ d.ponto.nome || 'Sem dados' }}</div>
                   <div class="pa-label">{{ d.ponto.endereco || 'Endereço não informado' }}</div>
-                  <div class="pa-label">{{ d.ponto.telefone || 'Telefone não informado' }}</div>
+                  <div class="pa-label">
+                    <WhatsAppContact :phone="d.ponto.telefone" />
+                  </div>
                 </template>
               </div>
 
@@ -56,20 +58,25 @@
             </div>
 
             <div class="row pa-stats">
-              <div class="col-4">
+              <div class="col-6 col-sm-3">
                 <div class="pa-label">Visitas</div>
                 <q-skeleton v-if="carregando" type="text" width="36px" height="24px" />
                 <div v-else class="pa-stat">{{ formatarInteiro(d.ponto.totalVisitas) }}</div>
               </div>
-              <div class="col-4">
+              <div class="col-6 col-sm-3">
                 <div class="pa-label">Vendas</div>
                 <q-skeleton v-if="carregando" type="text" width="36px" height="24px" />
                 <div v-else class="pa-stat">{{ formatarInteiro(d.ponto.totalVendas) }}</div>
               </div>
-              <div class="col-4">
+              <div class="col-6 col-sm-3">
                 <div class="pa-label">Leads</div>
                 <q-skeleton v-if="carregando" type="text" width="36px" height="24px" />
                 <div v-else class="pa-stat">{{ formatarInteiro(d.ponto.totalLeads) }}</div>
+              </div>
+              <div class="col-6 col-sm-3">
+                <div class="pa-label">Telemedicina</div>
+                <q-skeleton v-if="carregando" type="text" width="36px" height="24px" />
+                <div v-else class="pa-stat">{{ formatarInteiro(d.ponto.totalTelemedicina) }}</div>
               </div>
             </div>
 
@@ -85,10 +92,13 @@
             <div class="pa-label">Ordenado pela média de vendas por visita</div>
           </div>
           <q-btn
+            v-if="podeExportar"
             outline
             color="primary"
             label="Exportar planilha"
             no-caps
+            :loading="exportando"
+            :disable="carregando"
             @click="baixarRanking"
           />
         </div>
@@ -137,7 +147,9 @@
             <q-td :props="props">
               <div class="pa-ponto-nome">{{ props.row.nome }}</div>
               <div class="pa-label">{{ props.row.endereco }}</div>
-              <div class="pa-label">{{ props.row.telefone || 'Telefone não informado' }}</div>
+              <div class="pa-label">
+                <WhatsAppContact :phone="props.row.telefone" />
+              </div>
             </q-td>
           </template>
 
@@ -165,10 +177,16 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { apiFetch } from 'src/services/api'
+import WhatsAppContact from 'src/components/WhatsAppContact.vue'
+import { notificar } from 'src/services/notificacoes'
+import { useQuasar } from 'quasar'
+import { temPapel } from 'src/services/auth'
 
+const $q = useQuasar()
 const totalVendas = ref(0)
 const totalAcoes = ref(0)
 const totalLeads = ref(0)
+const totalTelemedicina = ref(0)
 
 const ranking = ref([])
 
@@ -177,6 +195,9 @@ const piorPonto = ref({})
 
 const carregando = ref(true)
 const erro = ref(false)
+const erroMensagem = ref('')
+const exportando = ref(false)
+const podeExportar = temPapel('gestor')
 
 const pagination = ref({ rowsPerPage: 10 })
 let contagemFrame = null
@@ -195,7 +216,8 @@ function formatarDecimal(valor) {
 const resumo = computed(() => [
   { label: 'Total de ações', valor: formatarInteiro(totalAcoes.value) },
   { label: 'Total de vendas', valor: formatarInteiro(totalVendas.value) },
-  { label: 'Total de leads', valor: formatarInteiro(totalLeads.value) }
+  { label: 'Total de leads', valor: formatarInteiro(totalLeads.value) },
+  { label: 'Total de telemedicina', valor: formatarInteiro(totalTelemedicina.value) }
 ])
 
 const destaques = computed(() => [
@@ -216,7 +238,8 @@ function animarTotais(data) {
   const alvos = {
     acoes: Number(data.totalAcoes || 0),
     vendas: Number(data.totalVendas || 0),
-    leads: Number(data.totalLeads || 0)
+    leads: Number(data.totalLeads || 0),
+    telemedicina: Number(data.totalTelemedicina || 0)
   }
 
   if (contagemFrame !== null) cancelAnimationFrame(contagemFrame)
@@ -225,13 +248,15 @@ function animarTotais(data) {
     totalAcoes.value = alvos.acoes
     totalVendas.value = alvos.vendas
     totalLeads.value = alvos.leads
+    totalTelemedicina.value = alvos.telemedicina
     return
   }
 
   const iniciais = {
     acoes: totalAcoes.value,
     vendas: totalVendas.value,
-    leads: totalLeads.value
+    leads: totalLeads.value,
+    telemedicina: totalTelemedicina.value
   }
   const inicio = performance.now()
   const duracao = 760
@@ -243,6 +268,7 @@ function animarTotais(data) {
     totalAcoes.value = Math.round(iniciais.acoes + (alvos.acoes - iniciais.acoes) * suavizado)
     totalVendas.value = Math.round(iniciais.vendas + (alvos.vendas - iniciais.vendas) * suavizado)
     totalLeads.value = Math.round(iniciais.leads + (alvos.leads - iniciais.leads) * suavizado)
+    totalTelemedicina.value = Math.round(iniciais.telemedicina + (alvos.telemedicina - iniciais.telemedicina) * suavizado)
 
     if (progresso < 1) {
       contagemFrame = requestAnimationFrame(atualizarContagem)
@@ -286,12 +312,20 @@ const columns = [
     field: 'mediaLeads',
     align: 'center',
     format: valor => formatarDecimal(valor)
+  },
+  {
+    name: 'mediaTelemedicina',
+    label: 'Média telemedicina',
+    field: 'mediaTelemedicina',
+    align: 'center',
+    format: valor => formatarDecimal(valor)
   }
 ]
 
 async function buscarDados() {
   carregando.value = true
   erro.value = false
+  erroMensagem.value = ''
 
   try {
 
@@ -300,7 +334,7 @@ async function buscarDados() {
     const responseRanking = await apiFetch('/dashboard/ranking')
 
     if (!responseDashboard.ok) {
-      throw new Error('Erro ao buscar dados do dashboard')
+      throw new Error(await mensagemErroResposta(responseDashboard, 'Erro ao buscar dados do dashboard'))
     }
 
     const dataDashboard = await responseDashboard.json()
@@ -323,7 +357,8 @@ async function buscarDados() {
 
         mediaVendas: Math.round(item.mediaVendas * 100) / 100,
 
-        mediaLeads: Math.round(item.mediaLeads * 100) / 100
+        mediaLeads: Math.round(item.mediaLeads * 100) / 100,
+        mediaTelemedicina: Math.round(Number(item.mediaTelemedicina || 0) * 100) / 100
       }))
 
       melhorVendas.value = dataRanking.melhorVendas || {}
@@ -331,13 +366,24 @@ async function buscarDados() {
       piorPonto.value = dataRanking.piorPonto || {}
     } else {
       erro.value = true
+      erroMensagem.value = await mensagemErroResposta(responseRanking, 'Não foi possível carregar o ranking')
     }
 
   } catch (e) {
     erro.value = true
+    erroMensagem.value = e.message || 'Não foi possível carregar os dados.'
     console.error('Erro ao carregar o dashboard:', e)
   } finally {
     carregando.value = false
+  }
+}
+
+async function mensagemErroResposta(response, fallback) {
+  try {
+    const body = await response.clone().json()
+    return body.error || body.erro || fallback
+  } catch {
+    return `${fallback} (HTTP ${response.status}).`
   }
 }
 
@@ -350,9 +396,19 @@ onBeforeUnmount(() => {
 })
 
 async function baixarRanking() {
+  exportando.value = true
   try {
     const resp = await apiFetch('/dashboard/ranking/xlsx')
-    if (!resp.ok) throw new Error('Erro ao baixar XLSX')
+    if (!resp.ok) {
+      let mensagem = `Não foi possível exportar o ranking (HTTP ${resp.status}).`
+      try {
+        const body = await resp.json()
+        mensagem = body.error || body.erro || mensagem
+      } catch {
+        // Keep the HTTP status when the server does not return JSON.
+      }
+      throw new Error(mensagem)
+    }
 
     const blob = await resp.blob()
     const blobUrl = window.URL.createObjectURL(blob)
@@ -363,8 +419,12 @@ async function baixarRanking() {
     a.click()
     a.remove()
     window.URL.revokeObjectURL(blobUrl)
+    notificar($q, 'sucesso', 'Ranking exportado com sucesso.')
   } catch (e) {
     console.error('Erro ao baixar ranking XLSX:', e)
+    notificar($q, 'erro', e.message || 'Não foi possível exportar o ranking.')
+  } finally {
+    exportando.value = false
   }
 }
 </script>

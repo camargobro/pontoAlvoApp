@@ -1,10 +1,27 @@
 import express from 'express';
-import { buscarUsuarios, criarUsuario, apagarUsuario, login } from '../controller/usuariosController.js';
+import {
+  alterarMinhaSenha,
+  atualizarUsuario,
+  apagarUsuario,
+  buscarUsuarios,
+  criarUsuario,
+  login,
+  registrarEmpresa
+} from '../controller/usuariosController.js';
 import { autenticar } from '../middlewares/autenticacaoUsuario.js';
-var router = express.Router();
+import { exigirEmpresa, exigirPapel } from '../middlewares/exigirPapel.js';
+import { limitarCadastro, limitarLogin } from '../middlewares/limiteRequisicoes.js';
 
-router.get('/', autenticar, buscarUsuarios);
-router.post('/registrar', criarUsuario);
-router.delete('/:id', autenticar, apagarUsuario);
-router.post('/login', login)
+const router = express.Router();
+
+router.post('/registrar', limitarCadastro, registrarEmpresa);
+router.post('/login', limitarLogin, login);
+
+router.use(autenticar);
+router.put('/minha-senha', alterarMinhaSenha);
+router.get('/', exigirPapel('gestor'), exigirEmpresa, buscarUsuarios);
+router.post('/', exigirPapel('gestor'), exigirEmpresa, criarUsuario);
+router.put('/:id', exigirPapel('gestor'), exigirEmpresa, atualizarUsuario);
+router.delete('/:id', exigirPapel('gestor'), exigirEmpresa, apagarUsuario);
+
 export default router;

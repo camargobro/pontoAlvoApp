@@ -15,7 +15,12 @@ export function getUser () {
   }
 }
 
+export function temPapel (...papeis) {
+  return papeis.includes(getUser()?.papel)
+}
+
 export function saveSession ({ token, usuario }) {
+  if (usuario?.papel) usuario.papel = String(usuario.papel)
   window.localStorage.setItem(TOKEN_KEY, token)
   window.localStorage.setItem(USER_KEY, JSON.stringify(usuario))
 }

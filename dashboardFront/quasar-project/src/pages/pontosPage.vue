@@ -3,12 +3,26 @@
     <div class="pa-container">
 
       <header class="pa-header">
-        <h1 class="pa-title">Pontos</h1>
-        <p class="pa-subtitle">Todos os pontos de venda cadastrados</p>
+        <div class="row items-center justify-between q-col-gutter-md">
+          <div class="col-12 col-sm">
+            <h1 class="pa-title">Pontos</h1>
+            <p class="pa-subtitle">Todos os pontos de venda cadastrados</p>
+          </div>
+          <div class="col-12 col-sm-auto">
+            <q-btn
+              unelevated
+              no-caps
+              color="primary"
+              icon="add"
+              label="Criar ponto"
+              @click="abrirCriacao"
+            />
+          </div>
+        </div>
       </header>
 
       <q-banner v-if="erro" rounded class="bg-red-1 text-negative q-mb-lg">
-        Não foi possível carregar os pontos. O servidor pode estar iniciando, tente novamente em instantes.
+        {{ erroMensagem || 'Não foi possível carregar os pontos. Tente novamente em instantes.' }}
         <template v-slot:action>
           <q-btn flat no-caps color="negative" label="Tentar novamente" @click="carregarPontos" />
         </template>
@@ -62,9 +76,21 @@
             </q-td>
           </template>
 
+          <template v-slot:body-cell-telefone="props">
+            <q-td :props="props">
+              <WhatsAppContact :phone="props.row.telefone" fallback="—" />
+            </q-td>
+          </template>
+
           <template v-slot:body-cell-acoes="props">
             <q-td :props="props" class="text-right">
+              <EditButton
+                v-if="podeGerenciarPontos"
+                :label="`Editar ${props.row.nome}`"
+                @click="abrirEdicao(props.row)"
+              />
               <DeleteButton
+                v-if="podeGerenciarPontos"
                 :label="`Excluir ${props.row.nome}`"
                 @click="confirmarExclusao(props.row)"
               />
@@ -85,27 +111,111 @@
       intent="danger"
       @confirm="excluirPonto"
     />
+
+    <q-dialog v-model="dialogPonto" persistent>
+      <q-card class="pa-dialog">
+        <q-form @submit.prevent="salvarPonto">
+          <q-card-section>
+            <div class="pa-secao-titulo">{{ criandoPonto ? 'Criar ponto' : 'Editar ponto' }}</div>
+          </q-card-section>
+
+          <q-card-section class="q-pt-none">
+            <div class="row q-col-gutter-md">
+              <div class="col-12 col-sm-8">
+                <q-input v-model="pontoEmEdicao.nome" :rules="[obrigatorio]" label="Nome do ponto" lazy-rules outlined />
+              </div>
+              <div class="col-12 col-sm-4">
+                <q-input v-model="pontoEmEdicao.telefone" :rules="[obrigatorio]" label="Telefone" type="tel" lazy-rules outlined />
+              </div>
+              <div class="col-12 col-sm-4">
+                <q-select
+                  v-model="pontoEmEdicao.tipo"
+                  :options="tiposPontoDisponiveis"
+                  :rules="[obrigatorio]"
+                  label="Tipo"
+                  lazy-rules
+                  outlined
+                />
+              </div>
+              <div class="col-12">
+                <q-input v-model="pontoEmEdicao.endereco" :rules="[obrigatorio]" label="Endereço" lazy-rules outlined />
+              </div>
+              <div class="col-12 col-sm-6">
+                <q-input v-model="pontoEmEdicao.bairro" :rules="[obrigatorio]" label="Bairro" lazy-rules outlined />
+              </div>
+              <div class="col-12 col-sm-6">
+                <q-input v-model="pontoEmEdicao.cidade" :rules="[obrigatorio]" label="Cidade" lazy-rules outlined />
+              </div>
+            </div>
+          </q-card-section>
+
+          <q-card-actions align="right" class="q-pa-md">
+            <q-btn flat no-caps color="grey-8" label="Cancelar" :disable="salvandoPonto" @click="dialogPonto = false" />
+            <q-btn
+              unelevated
+              no-caps
+              color="primary"
+              :label="criandoPonto ? 'Criar ponto' : 'Salvar alterações'"
+              type="submit"
+              :loading="salvandoPonto"
+            />
+          </q-card-actions>
+        </q-form>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useQuasar } from 'quasar'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import DeleteButton from '../components/DeleteButton.vue'
+import EditButton from '../components/EditButton.vue'
+import WhatsAppContact from '../components/WhatsAppContact.vue'
 import { apiFetch } from '../services/api.js'
 import { notificar } from '../services/notificacoes.js'
+import { tiposPonto } from '../constants/tiposPonto.js'
+import { temPapel } from '../services/auth.js'
 
 const $q = useQuasar()
 const pontos = ref([])
 const carregando = ref(true)
 const erro = ref(false)
+const erroMensagem = ref('')
 const filtro = ref('')
 const dialogExclusao = ref(false)
 const pontoSelecionado = ref(null)
+const dialogPonto = ref(false)
+const criandoPonto = ref(false)
+const salvandoPonto = ref(false)
+const pontoEmEdicao = ref(criarPontoVazio())
 const paginacao = ref({ sortBy: 'nome', descending: false, rowsPerPage: 10 })
+const podeGerenciarPontos = temPapel('gestor')
 
 const ordenarTexto = (a, b) => String(a || '').localeCompare(String(b || ''), 'pt-BR')
+const tiposPontoDisponiveis = computed(() => {
+  const tipoAtual = pontoEmEdicao.value.tipo
+  return tipoAtual && !tiposPonto.includes(tipoAtual) ? [...tiposPonto, tipoAtual] : tiposPonto
+})
+const obrigatorio = (valor) =>
+  (typeof valor === 'string' && valor.trim().length > 0) || 'Campo obrigatório'
+
+function criarPontoVazio() {
+  return { _id: '', nome: '', telefone: '', endereco: '', bairro: '', cidade: '', tipo: '' }
+}
+
+async function mensagemErroResposta(response, fallback) {
+  let body = null
+  try {
+    body = await response.clone().json()
+  } catch {
+    // The API may return a non-JSON 404 for an unregistered route.
+  }
+
+  return body?.error || body?.erro || body?.message ||
+    `${fallback} (HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ''}).`
+}
 
 const columns = [
   { name: 'nome', label: 'Nome', field: 'nome', align: 'left', sortable: true, sort: ordenarTexto },
@@ -116,6 +226,51 @@ const columns = [
   { name: 'cidade', label: 'Cidade', field: 'cidade', align: 'left', sortable: true, sort: ordenarTexto },
   { name: 'acoes', label: '', field: '_id', align: 'right' }
 ]
+
+function abrirEdicao(ponto) {
+  criandoPonto.value = false
+  pontoEmEdicao.value = { ...ponto }
+  dialogPonto.value = true
+}
+
+function abrirCriacao() {
+  criandoPonto.value = true
+  pontoEmEdicao.value = criarPontoVazio()
+  dialogPonto.value = true
+}
+
+async function salvarPonto() {
+  salvandoPonto.value = true
+
+  try {
+    const { _id, nome, telefone, endereco, bairro, cidade, tipo } = pontoEmEdicao.value
+    const criando = criandoPonto.value
+    const response = await apiFetch(criando ? '/pontos' : `/pontos/${_id}`, {
+      method: criando ? 'POST' : 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nome, telefone, endereco, bairro, cidade, tipo }),
+    })
+    if (!response.ok) {
+      const operacao = criando ? 'criar' : 'atualizar'
+      throw new Error(await mensagemErroResposta(response, `Não foi possível ${operacao} o ponto`))
+    }
+
+    const pontoSalvo = await response.json()
+    if (criando) {
+      pontos.value = [...pontos.value, pontoSalvo]
+      notificar($q, 'sucesso', 'Ponto criado com sucesso.')
+    } else {
+      pontos.value = pontos.value.map((ponto) => ponto._id === _id ? pontoSalvo : ponto)
+      notificar($q, 'sucesso', 'Ponto atualizado com sucesso.')
+    }
+    dialogPonto.value = false
+  } catch (error) {
+    console.error('Erro ao salvar ponto:', error)
+    notificar($q, 'erro', error.message || 'Não foi possível salvar o ponto.')
+  } finally {
+    salvandoPonto.value = false
+  }
+}
 
 function confirmarExclusao(ponto) {
   pontoSelecionado.value = ponto
@@ -129,7 +284,7 @@ async function excluirPonto() {
   try {
     const response = await apiFetch(`/pontos/${ponto._id}`, { method: 'DELETE' })
     if (!response.ok) {
-      throw new Error('Não foi possível excluir o ponto.')
+      throw new Error(await mensagemErroResposta(response, 'Não foi possível excluir o ponto'))
     }
 
     pontos.value = pontos.value.filter((item) => item._id !== ponto._id)
@@ -145,15 +300,17 @@ async function excluirPonto() {
 async function carregarPontos() {
   carregando.value = true
   erro.value = false
+  erroMensagem.value = ''
 
   try {
     const response = await apiFetch('/pontos')
     if (!response.ok) {
-      throw new Error('Falha ao carregar pontos')
+      throw new Error(await mensagemErroResposta(response, 'Falha ao carregar pontos'))
     }
     pontos.value = await response.json()
   } catch (e) {
     erro.value = true
+    erroMensagem.value = e.message || 'Não foi possível carregar os pontos.'
     console.error('Erro ao carregar pontos:', e)
   } finally {
     carregando.value = false
@@ -217,6 +374,12 @@ onMounted(() => {
 
 .pa-card--tabela {
   overflow: hidden;
+}
+
+.pa-dialog {
+  width: 100%;
+  max-width: 560px;
+  border-radius: 12px;
 }
 
 .pa-tabela-topo {

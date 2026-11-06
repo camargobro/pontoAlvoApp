@@ -25,12 +25,14 @@ async function migrarEmpresas() {
   const emails = new Set();
   const cnpjsNovos = new Set();
   const cnpjsEmpresas = new Map();
+  const usuariosInvalidos = [];
 
   for (const empresa of empresas) {
     const cnpj = normalizarCnpj(empresa.cnpj);
-    if (cnpj.length !== 14) {
+    if (cnpj && cnpj.length !== 14) {
       throw new Error(`A empresa ${empresa._id} não possui CNPJ válido.`);
     }
+    if (!cnpj) continue;
     const empresaComMesmoCnpj = cnpjsEmpresas.get(cnpj);
     if (empresaComMesmoCnpj && String(empresaComMesmoCnpj._id) !== String(empresa._id)) {
       throw new Error('Há CNPJs duplicados na coleção de empresas. Corrija os registros antes da migração.');
@@ -48,20 +50,57 @@ async function migrarEmpresas() {
 
     if (!usuario.papel) {
       const cnpj = normalizarCnpj(usuario.cnpj);
-      if (!usuario.nome || cnpj.length !== 14) {
-        throw new Error(`Dados de empresa inválidos no usuário ${usuario._id}.`);
+      const problemas = [];
+      if (typeof usuario.nome !== 'string' || !usuario.nome.trim()) {
+        problemas.push('nome ausente');
       }
-      if (cnpjsNovos.has(cnpj)) {
+      if (cnpj && cnpj.length !== 14) {
+        problemas.push(`CNPJ inválido (${cnpj.length} caracteres após normalização; esperado: 14)`);
+      }
+      if (problemas.length) {
+        usuariosInvalidos.push({ id: usuario._id, problemas });
+        continue;
+      }
+      if (cnpj && cnpjsNovos.has(cnpj)) {
         throw new Error('Há CNPJs duplicados entre usuários antigos. Corrija os registros antes da migração.');
       }
-      cnpjsNovos.add(cnpj);
+      if (cnpj) cnpjsNovos.add(cnpj);
 
-      const empresaComCnpj = cnpjsEmpresas.get(cnpj);
+      const empresaComCnpj = cnpj ? cnpjsEmpresas.get(cnpj) : null;
       if (empresaComCnpj && String(empresaComCnpj._id) !== String(usuario._id)) {
         throw new Error('Há CNPJs que já pertencem a outra empresa. Corrija os registros antes da migração.');
       }
     }
   }
+
+  if (usuariosInvalidos.length) {
+    const limite = 20;
+    const detalhes = usuariosInvalidos
+      .slice(0, limite)
+      .map(({ id, problemas }) => `- ${id}: ${problemas.join('; ')}`)
+      .join('\n');
+    const restantes = usuariosInvalidos.length - limite;
+    throw new Error(
+      `Dados de empresa inválidos em ${usuariosInvalidos.length} usuário(s). ` +
+      `Corrija os dados indicados antes de executar novamente:\n${detalhes}` +
+      (restantes > 0 ? `\n- ... e mais ${restantes} usuário(s)` : '')
+    );
+  }
+
+  const indicesEmpresa = await empresasCollection.listIndexes().toArray();
+  for (const indice of indicesEmpresa) {
+    if (indice.unique && !indice.partialFilterExpression &&
+        Object.keys(indice.key).length === 1 && indice.key.cnpj === 1) {
+      await empresasCollection.dropIndex(indice.name);
+    }
+  }
+  await empresasCollection.createIndex(
+    { cnpj: 1 },
+    {
+      unique: true,
+      partialFilterExpression: { cnpj: { $type: 'string', $gt: '' } }
+    }
+  );
 
   let migrados = 0;
   for (const usuario of usuarios) {
@@ -69,13 +108,14 @@ async function migrarEmpresas() {
     if (!usuario.papel) {
       const cnpj = normalizarCnpj(usuario.cnpj);
       const empresaExistente = await empresasCollection.findOne({ _id: usuario._id });
-      if (empresaExistente && empresaExistente.cnpj !== cnpj) {
+      if (empresaExistente && cnpj &&
+          normalizarCnpj(empresaExistente.cnpj) !== cnpj) {
         throw new Error(`A empresa do usuário ${usuario._id} já existe com outro CNPJ.`);
       }
 
       await empresasCollection.updateOne(
         { _id: usuario._id },
-        { $setOnInsert: { nome: usuario.nome, cnpj } },
+        { $setOnInsert: { nome: usuario.nome, ...(cnpj ? { cnpj } : {}) } },
         { upsert: true }
       );
 
@@ -93,7 +133,6 @@ async function migrarEmpresas() {
   }
 
   await usuariosCollection.createIndex({ email: 1 }, { unique: true });
-  await empresasCollection.createIndex({ cnpj: 1 }, { unique: true });
   console.log(`Migração concluída. Usuários migrados: ${migrados}.`);
 }
 

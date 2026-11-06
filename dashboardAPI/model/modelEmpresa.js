@@ -2,8 +2,16 @@ import mongoose from 'mongoose';
 
 const empresaSchema = new mongoose.Schema({
   nome: { type: String, required: true, trim: true },
-  cnpj: { type: String, required: true, unique: true, trim: true, uppercase: true }
+  cnpj: { type: String, trim: true, uppercase: true }
 });
+
+empresaSchema.index(
+  { cnpj: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { cnpj: { $type: 'string', $gt: '' } }
+  }
+);
 
 export const Empresa = mongoose.model('Empresa', empresaSchema);
 

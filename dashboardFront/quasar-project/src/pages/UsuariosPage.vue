@@ -56,14 +56,15 @@
       <q-card class="pa-dialog">
         <q-form ref="formRef" @submit.prevent="salvarUsuario">
           <q-card-section>
-            <div class="pa-secao-titulo">{{ editando ? 'Editar usuário' : 'Adicionar usuário' }}</div>
-            <div v-if="!editando" class="pa-label">A senha definida será provisória e poderá ser trocada pelo usuário.</div>
+            <div class="pa-secao-titulo">{{ editando ? 'Editar perfil do usuário' : 'Adicionar usuário' }}</div>
+            <div class="pa-label">
+              {{ editando ? 'Deixe a senha em branco para mantê-la como está.' : 'Defina uma senha inicial para este usuário.' }}
+            </div>
           </q-card-section>
 
           <q-card-section class="q-pt-none">
             <q-input v-model.trim="form.nome" :rules="[obrigatorio]" label="Nome" lazy-rules outlined />
             <q-input
-              v-if="!editando"
               v-model.trim="form.email"
               :rules="[obrigatorio, emailValido]"
               label="E-mail"
@@ -73,16 +74,26 @@
               outlined
             />
             <q-input
-              v-if="!editando"
               v-model="form.senha"
-              :rules="[obrigatorio, senhaValida]"
-              label="Senha provisória"
+              :rules="editando ? [senhaOpcionalValida] : [obrigatorio, senhaValida]"
+              :label="editando ? 'Nova senha (opcional)' : 'Senha provisória'"
               type="password"
               autocomplete="new-password"
               lazy-rules
               outlined
             />
-            <q-select v-model="form.papel" :options="papeis" :rules="[obrigatorio]" label="Papel" lazy-rules outlined />
+            <q-select
+              v-model="form.papel"
+              :options="papeis"
+              option-label="label"
+              option-value="value"
+              emit-value
+              map-options
+              :rules="[obrigatorio]"
+              label="Cargo"
+              lazy-rules
+              outlined
+            />
           </q-card-section>
 
           <q-card-actions align="right" class="q-pa-md">
@@ -128,16 +139,20 @@ const editando = ref(false)
 const formRef = ref(null)
 const form = ref(formularioVazio())
 const paginacao = ref({ rowsPerPage: 10 })
-const papeis = ['gestor', 'colaborador']
+const papeis = [
+  { label: 'Gestor', value: 'gestor' },
+  { label: 'Colaborador', value: 'colaborador' }
+]
 const obrigatorio = (valor) =>
   (typeof valor === 'string' && valor.trim().length > 0) || 'Campo obrigatório'
 const emailValido = (valor) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(valor) || 'Informe um e-mail válido'
 const senhaValida = (valor) => valor.length >= 8 || 'Use ao menos 8 caracteres'
+const senhaOpcionalValida = (valor) => !valor || senhaValida(valor)
 
 const columns = [
   { name: 'nome', label: 'Nome', field: 'nome', align: 'left', sortable: true },
   { name: 'email', label: 'E-mail', field: 'email', align: 'left' },
-  { name: 'papel', label: 'Papel', field: 'papel', align: 'left' },
+  { name: 'papel', label: 'Cargo', field: 'papel', align: 'left' },
   { name: 'acoes', label: '', field: 'id', align: 'right' }
 ]
 
@@ -190,9 +205,12 @@ async function salvarUsuario() {
   salvando.value = true
 
   try {
-    const payload = editando.value
-      ? { nome: form.value.nome, papel: form.value.papel }
-      : { nome: form.value.nome, email: form.value.email, senha: form.value.senha, papel: form.value.papel }
+    const payload = {
+      nome: form.value.nome,
+      email: form.value.email,
+      papel: form.value.papel
+    }
+    if (!editando.value || form.value.senha) payload.senha = form.value.senha
     const response = await apiFetch(editando.value ? `/usuario/${form.value.id}` : '/usuario', {
       method: editando.value ? 'PUT' : 'POST',
       headers: { 'Content-Type': 'application/json' },

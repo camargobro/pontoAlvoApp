@@ -122,7 +122,6 @@ const menu = computed(() => {
     : []
 
   if (temPapel('gestor')) itens.push({ label: 'Usuários', path: '/app/usuarios' })
-  itens.push({ label: 'Minha senha', path: '/app/minha-senha' })
   return itens
 })
 const activeMenuIndex = computed(() => menu.value.findIndex((item) => route.path === item.path))

@@ -7,10 +7,8 @@ import {
   contarGestores,
   deleteUsuario,
   getUsuario,
-  getUsuarioPorId,
   getUsuarios,
   postUsuario,
-  putSenha,
   putUsuario
 } from '../model/modelUsuario.js';
 import {
@@ -182,13 +180,18 @@ export async function criarUsuario(req, res) {
 export async function atualizarUsuario(req, res) {
   if (!req.body) return res.status(400).json({ error: 'Dados do usuário obrigatórios' });
   const nome = String(req.body.nome || '').trim();
-  const { papel } = req.body;
-  if (!nome || !papelEmpresaValido(papel)) {
-    return res.status(400).json({ error: 'Informe nome e papel válido' });
+  const email = normalizarEmail(req.body.email);
+  const { senha, papel } = req.body;
+  if (!nome || !emailValido(email) || !papelEmpresaValido(papel) ||
+      (senha !== undefined && senha !== '' && (typeof senha !== 'string' || senha.length < 8))) {
+    return res.status(400).json({ error: 'Informe nome, e-mail válido, papel válido e, se desejar alterar a senha, use ao menos 8 caracteres' });
   }
 
   let session;
   try {
+    const senhaHash = typeof senha === 'string' && senha.length > 0
+      ? await bcrypt.hash(senha, saltRounds)
+      : undefined;
     session = await mongoose.startSession();
     let resultado;
     await session.withTransaction(async () => {
@@ -197,6 +200,14 @@ export async function atualizarUsuario(req, res) {
       if (!usuarioAtual) {
         resultado = { status: 404, body: { error: 'Usuário não encontrado' } };
         return;
+      }
+
+      if (email !== normalizarEmail(usuarioAtual.email)) {
+        const usuarioComEmail = await verificarEmailDuplicado(email);
+        if (usuarioComEmail && String(usuarioComEmail._id) !== String(usuarioAtual._id)) {
+          resultado = { status: 409, body: { error: 'E-mail já cadastrado' } };
+          return;
+        }
       }
 
       if (usuarioAtual.papel === 'gestor' && papel !== 'gestor' &&
@@ -208,7 +219,7 @@ export async function atualizarUsuario(req, res) {
       const atualizado = await putUsuario(
         req.params.id,
         req.empresaId,
-        { nome, papel },
+        { nome, email, papel, ...(senhaHash ? { senha: senhaHash } : {}) },
         { session }
       );
       resultado = atualizado
@@ -217,6 +228,7 @@ export async function atualizarUsuario(req, res) {
     });
     return res.status(resultado.status).json(resultado.body);
   } catch (error) {
+    if (erroDeDuplicidade(error)) return res.status(409).json({ error: 'E-mail já cadastrado' });
     console.error('Erro ao atualizar usuário:', error);
     return res.status(500).json({ error: 'Erro ao atualizar usuário' });
   } finally {
@@ -257,27 +269,5 @@ export async function apagarUsuario(req, res) {
     return res.status(500).json({ error: 'Erro ao remover usuário' });
   } finally {
     if (session) await session.endSession();
-  }
-}
-
-export async function alterarMinhaSenha(req, res) {
-  if (!req.body) return res.status(400).json({ error: 'Dados da senha obrigatórios' });
-  const { senhaAtual, novaSenha } = req.body;
-  if (typeof senhaAtual !== 'string' || typeof novaSenha !== 'string' || novaSenha.length < 8) {
-    return res.status(400).json({ error: 'Informe a senha atual e uma nova senha com ao menos 8 caracteres' });
-  }
-
-  try {
-    const usuario = await getUsuarioPorId(req.usuario.id);
-    if (!usuario) return res.status(401).json({ error: 'Usuário não encontrado' });
-    if (!(await bcrypt.compare(senhaAtual, usuario.senha))) {
-      return res.status(400).json({ error: 'Senha atual incorreta' });
-    }
-
-    await putSenha(req.usuario.id, await bcrypt.hash(novaSenha, saltRounds));
-    return res.status(200).json({ message: 'Senha alterada com sucesso' });
-  } catch (error) {
-    console.error('Erro ao alterar senha:', error);
-    return res.status(500).json({ error: 'Erro ao alterar senha' });
   }
 }

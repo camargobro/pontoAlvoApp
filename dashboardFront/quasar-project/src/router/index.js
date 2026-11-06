@@ -43,7 +43,7 @@ export default defineRouter(function (/* { store, ssrContext } */) {
     if (to.meta.guestOnly && autenticado) return '/app'
 
     if (to.meta.roles && !to.meta.roles.includes(usuario?.papel)) {
-      return usuario?.papel === 'admin' ? '/app/minha-senha' : '/app'
+      return usuario?.papel === 'admin' ? '/' : '/app'
     }
   })
 

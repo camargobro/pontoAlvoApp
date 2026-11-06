@@ -25,24 +25,12 @@ export async function getUsuario(id, empresaId, options = {}) {
   return await Usuario.findOne({ _id: id, empresaId }).session(options.session || null);
 }
 
-export async function getUsuarioPorId(id) {
-  return await Usuario.findOne({ _id: id });
-}
-
 export async function putUsuario(id, empresaId, dados, options = {}) {
   if (!empresaId) throw new Error('empresaId obrigatório');
   return await Usuario.findOneAndUpdate(
     { _id: id, empresaId },
     dados,
     { returnDocument: 'after', runValidators: true, session: options.session }
-  );
-}
-
-export async function putSenha(id, senha) {
-  return await Usuario.findOneAndUpdate(
-    { _id: id },
-    { senha },
-    { returnDocument: 'after', runValidators: true }
   );
 }
 

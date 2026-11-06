@@ -12,8 +12,7 @@ const routes = [
       { path: 'criar-acao', component: () => import('pages/criarAcaoPage.vue'), meta: { roles: ['gestor', 'colaborador'] } },
       { path: 'historico-acoes', component: () => import('pages/criarAcaoPage.vue'), meta: { roles: ['gestor', 'colaborador'] } },
       { path: 'pontos', component: () => import('pages/pontosPage.vue'), meta: { roles: ['gestor', 'colaborador'] } },
-      { path: 'usuarios', component: () => import('pages/UsuariosPage.vue'), meta: { roles: ['gestor'] } },
-      { path: 'minha-senha', component: () => import('pages/MinhaSenhaPage.vue') }
+      { path: 'usuarios', component: () => import('pages/UsuariosPage.vue'), meta: { roles: ['gestor'] } }
     ]
   },
 

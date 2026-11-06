@@ -1,6 +1,5 @@
 import express from 'express';
 import {
-  alterarMinhaSenha,
   atualizarUsuario,
   apagarUsuario,
   buscarUsuarios,
@@ -18,7 +17,6 @@ router.post('/registrar', limitarCadastro, registrarEmpresa);
 router.post('/login', limitarLogin, login);
 
 router.use(autenticar);
-router.put('/minha-senha', alterarMinhaSenha);
 router.get('/', exigirPapel('gestor'), exigirEmpresa, buscarUsuarios);
 router.post('/', exigirPapel('gestor'), exigirEmpresa, criarUsuario);
 router.put('/:id', exigirPapel('gestor'), exigirEmpresa, atualizarUsuario);

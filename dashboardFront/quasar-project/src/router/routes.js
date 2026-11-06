@@ -7,10 +7,13 @@ const routes = [
     component: () => import('layouts/MainLayout.vue'),
     meta: { requiresAuth: true },
     children: [
-      { path: '', component: () => import('pages/IndexPage.vue') },
-      { path: 'criar-acao', component: () => import('pages/criarAcaoPage.vue') },
-      { path: 'historico-acoes', component: () => import('pages/criarAcaoPage.vue') },
-      { path: 'pontos', component: () => import('pages/pontosPage.vue') }
+      { path: '', component: () => import('pages/IndexPage.vue'), meta: { roles: ['gestor', 'colaborador'] } },
+      { path: 'ranking', component: () => import('pages/RankingPage.vue'), meta: { roles: ['gestor', 'colaborador'] } },
+      { path: 'criar-acao', component: () => import('pages/criarAcaoPage.vue'), meta: { roles: ['gestor', 'colaborador'] } },
+      { path: 'historico-acoes', component: () => import('pages/criarAcaoPage.vue'), meta: { roles: ['gestor', 'colaborador'] } },
+      { path: 'pontos', component: () => import('pages/pontosPage.vue'), meta: { roles: ['gestor', 'colaborador'] } },
+      { path: 'usuarios', component: () => import('pages/UsuariosPage.vue'), meta: { roles: ['gestor'] } },
+      { path: 'minha-senha', component: () => import('pages/MinhaSenhaPage.vue') }
     ]
   },
 

@@ -48,7 +48,7 @@
           >
           <q-input
             v-if="isRegister"
-            v-model.trim="form.nome"
+            v-model.trim="form.nomeEmpresa"
             label="Nome da empresa"
             autocomplete="name"
             outlined
@@ -62,6 +62,14 @@
             autocomplete="off"
             outlined
             :rules="[obrigatorio, validarCnpj]"
+          />
+          <q-input
+            v-if="isRegister"
+            v-model.trim="form.nome"
+            label="Nome do gestor"
+            autocomplete="name"
+            outlined
+            :rules="[obrigatorio]"
           />
           <q-input
             v-model.trim="form.email"
@@ -145,7 +153,7 @@ const mostrarSenha = ref(false)
 const enviando = ref(false)
 const erro = ref('')
 const formRef = ref(null)
-const form = reactive({ nome: '', cnpj: '', email: '', senha: '', confirmacao: '' })
+const form = reactive({ nomeEmpresa: '', cnpj: '', nome: '', email: '', senha: '', confirmacao: '' })
 
 watch(isRegister, async (value) => {
   modoSelecionado.value = value ? 'cadastro' : 'login'
@@ -173,7 +181,13 @@ async function enviarFormulario () {
     const cadastro = isRegister.value
     const endpoint = cadastro ? '/usuario/registrar' : '/usuario/login'
     const body = cadastro
-      ? { nome: form.nome, cnpj: form.cnpj, email: form.email, senha: form.senha }
+      ? {
+          nomeEmpresa: form.nomeEmpresa,
+          cnpj: form.cnpj,
+          nome: form.nome,
+          email: form.email,
+          senha: form.senha
+        }
       : { email: form.email, senha: form.senha }
     const response = await fetch(apiUrl(endpoint), {
       method: 'POST',
@@ -192,9 +206,19 @@ async function enviarFormulario () {
       return
     }
 
+    if (
+      typeof data?.token !== 'string' ||
+      !data.token ||
+      !data.usuario ||
+      !['admin', 'gestor', 'colaborador'].includes(data.usuario.papel)
+    ) {
+      throw new Error('A API está desatualizada para este login. Atualize o backend e tente novamente.')
+    }
+
     saveSession(data)
     notificar($q, 'sucesso', 'Login realizado com sucesso.')
-    const destino = typeof route.query.redirect === 'string' ? route.query.redirect : '/app'
+    const destinoSolicitado = typeof route.query.redirect === 'string' ? route.query.redirect : ''
+    const destino = destinoSolicitado.startsWith('/app') ? destinoSolicitado : '/app'
     await router.replace(destino)
   } catch (error) {
     erro.value = error.message || 'Não foi possível conectar ao servidor.'

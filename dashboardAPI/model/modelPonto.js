@@ -19,10 +19,12 @@ export async function postPonto(ponto) {
 }
 
 export async function getPontos(empresaId) {
+  if (!empresaId) throw new Error('empresaId obrigatório');
   return await Pontos.find( {empresaId});
 }
 
 export async function deletePonto(id, empresaId) {
+  if (!empresaId) throw new Error('empresaId obrigatório');
   const session = await mongoose.startSession();
   let pontoRemovido = null;
 
@@ -45,4 +47,15 @@ export async function deletePonto(id, empresaId) {
   } finally {
     await session.endSession();
   }
+}
+
+export async function putPonto(id, empresaId, dados) {
+  if (!empresaId) throw new Error('empresaId obrigatório');
+  const { nome, telefone, endereco, bairro, cidade, tipo } = dados;
+
+  return await Pontos.findOneAndUpdate(
+    { _id: id, empresaId },
+    { nome, telefone, endereco, bairro, cidade, tipo },
+    { returnDocument: 'after', runValidators: true }
+  );
 }

@@ -59,7 +59,8 @@
 
         <div class="pa-conta">
           <div class="pa-conta-nome">{{ usuario?.nome || 'Conta conectada' }}</div>
-          <div v-if="usuario?.cnpj" class="pa-conta-cnpj">CNPJ: {{ usuario.cnpj }}</div>
+          <div class="pa-conta-cnpj">{{ usuario?.empresa?.nome || 'Administrador' }}</div>
+          <div v-if="usuario?.empresa?.cnpj" class="pa-conta-cnpj">CNPJ: {{ usuario.empresa.cnpj }}</div>
           <q-item clickable class="pa-nav pa-sair" @click="sair">
             <q-item-section>
               <div class="pa-sair-conteudo">
@@ -99,7 +100,7 @@ import { computed, ref } from 'vue'
 import ConfirmDialog from 'src/components/ConfirmDialog.vue'
 import { useQuasar } from 'quasar'
 import { useRouter, useRoute } from 'vue-router'
-import { clearSession, getUser } from 'src/services/auth'
+import { clearSession, getUser, temPapel } from 'src/services/auth'
 
 const $q = useQuasar()
 const router = useRouter()
@@ -109,13 +110,22 @@ const drawer = ref(false)
 const dialogSair = ref(false)
 const usuario = getUser()
 
-const menu = [
-  { label: 'Home', path: '/app' },
-  { label: 'Registrar ação', path: '/app/criar-acao' },
-  { label: 'Histórico de ações', path: '/app/historico-acoes' },
-  { label: 'Pontos', path: '/app/pontos' }
-]
-const activeMenuIndex = computed(() => menu.findIndex((item) => route.path === item.path))
+const menu = computed(() => {
+  const itens = temPapel('gestor', 'colaborador')
+    ? [
+        { label: 'Home', path: '/app' },
+        { label: 'Ranking', path: '/app/ranking' },
+        { label: 'Registrar ação', path: '/app/criar-acao' },
+        { label: 'Histórico de ações', path: '/app/historico-acoes' },
+        { label: 'Pontos', path: '/app/pontos' }
+      ]
+    : []
+
+  if (temPapel('gestor')) itens.push({ label: 'Usuários', path: '/app/usuarios' })
+  itens.push({ label: 'Minha senha', path: '/app/minha-senha' })
+  return itens
+})
+const activeMenuIndex = computed(() => menu.value.findIndex((item) => route.path === item.path))
 
 function go (path) {
   if (route.path !== path) {

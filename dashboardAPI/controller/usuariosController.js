@@ -1,110 +1,283 @@
-
-import { getUsuarios, postUsuario, deleteUsuario } from '../model/modelUsuario.js';
-import { verificaDuplicado, verificaUsuario, loginUsuario } from '../regrasNegocios/regraNegociosUsuarios.js';
-import jwt from "jsonwebtoken"
-import bcrypt from "bcrypt"
+import mongoose from 'mongoose';
+import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';
 import 'dotenv/config';
-const saltRounds = 10
+import { getEmpresa, postEmpresa, serializarAcessoEmpresa } from '../model/modelEmpresa.js';
+import {
+  contarGestores,
+  deleteUsuario,
+  getUsuario,
+  getUsuarioPorId,
+  getUsuarios,
+  postUsuario,
+  putSenha,
+  putUsuario
+} from '../model/modelUsuario.js';
+import {
+  emailValido,
+  normalizarCnpj,
+  normalizarEmail,
+  papelEmpresaValido,
+  verificarCnpjDuplicado,
+  verificarEmailDuplicado,
+  loginUsuario
+} from '../regrasNegocios/regraNegociosUsuarios.js';
 
-export async function buscarUsuarios(req, res) {
-    try {
-        const usuarios = await getUsuarios();
-        res.status(200).json(usuarios);
-    } catch (error) {
-        console.error("Erro ao obter usuarios:", error);
-        res.status(500).json({ error: "Erro ao obter usuarios" });
-    }
+const saltRounds = 10;
+
+function usuarioSeguro(usuario) {
+  return {
+    id: String(usuario._id),
+    nome: usuario.nome,
+    email: usuario.email,
+    papel: usuario.papel,
+    empresaId: usuario.empresaId
+  };
 }
 
-export async function criarUsuario(req, res) {
-    try {
-        const { nome, cnpj, email, senha } = req.body;
-        const cnpjNormalizado = String(cnpj || '').replace(/[^a-z0-9]/gi, '').toUpperCase();
-
-        const camposValidos = await verificaUsuario(nome, cnpjNormalizado, email, senha);
-        if (!camposValidos) {
-            return res.status(400).json({ error: "Algum campo está faltando" });
-        }
-
-        const duplicado = await verificaDuplicado({ nome, email, cnpj: cnpjNormalizado });
-        if (duplicado) {
-            return res.status(400).json({ error: "Nome, e-mail ou CNPJ já cadastrado" })
-        }
-
-        const senhaHash = await bcrypt.hash(senha, saltRounds)
-        const novoUsuario = await postUsuario({ nome, cnpj: cnpjNormalizado, email, senha: senhaHash });
-        if (!novoUsuario) {
-            return res.status(400).json({ error: "Erro ao criar usuario" });
-        }
-
-        const usuario = { id: novoUsuario._id, nome: novoUsuario.nome, cnpj: novoUsuario.cnpj, email: novoUsuario.email };
-
-        return res.status(201).json({ message: "Usuário criado com sucesso", usuario });
-    } catch (error) {
-        console.error("Erro ao criar usuario:", error);
-        return res.status(500).json({ error: "Erro ao criar usuario" });
-    }
+function erroDeDuplicidade(error) {
+  return error?.code === 11000;
 }
 
-export async function apagarUsuario(req, res) {
-    try {
-        const id = req.params.id;
-        const usuarioDeletado = await deleteUsuario(id);
+export async function registrarEmpresa(req, res) {
+  if (!req.body) return res.status(400).json({ error: 'Dados da empresa obrigatórios' });
+  const { nomeEmpresa, cnpj, nome, email, senha } = req.body;
+  const empresaNome = String(nomeEmpresa || '').trim();
+  const usuarioNome = String(nome || '').trim();
+  const cnpjNormalizado = normalizarCnpj(cnpj);
+  const emailNormalizado = normalizarEmail(email);
 
-        if (!usuarioDeletado) {
-            res.status(404).json({ error: "Usuario não encontrado" });
-        } else {
-            res.status(200).json({ message: "Usuario deletado com sucesso" });
-        }
-    } catch (error) {
-        res.status(500).json({ error: "Erro ao deletar usuario" });
+  if (!req.body || !empresaNome || !usuarioNome || cnpjNormalizado.length !== 14 ||
+      !emailValido(emailNormalizado) || typeof senha !== 'string' || senha.length < 8) {
+    return res.status(400).json({ error: 'Informe os dados da empresa e do gestor; a senha deve ter ao menos 8 caracteres' });
+  }
+
+  let session;
+  try {
+    if (await verificarCnpjDuplicado(cnpjNormalizado) || await verificarEmailDuplicado(emailNormalizado)) {
+      return res.status(409).json({ error: 'CNPJ ou e-mail já cadastrado' });
     }
+
+    session = await mongoose.startSession();
+    let novoUsuario;
+    await session.withTransaction(async () => {
+      const empresa = await postEmpresa(
+        { nome: empresaNome, cnpj: cnpjNormalizado },
+        { session }
+      );
+      novoUsuario = await postUsuario({
+        nome: usuarioNome,
+        email: emailNormalizado,
+        senha: await bcrypt.hash(senha, saltRounds),
+        empresaId: String(empresa._id),
+        papel: 'gestor'
+      }, { session });
+    });
+
+    return res.status(201).json({
+      message: 'Empresa e gestor criados com sucesso',
+      usuario: usuarioSeguro(novoUsuario)
+    });
+  } catch (error) {
+    if (erroDeDuplicidade(error)) {
+      return res.status(409).json({ error: 'CNPJ ou e-mail já cadastrado' });
+    }
+    console.error('Erro ao registrar empresa:', error);
+    return res.status(500).json({ error: 'Erro ao criar empresa e gestor' });
+  } finally {
+    if (session) await session.endSession();
+  }
 }
 
 export async function login(req, res) {
-    try {
-        const { email, senha } = req.body;
+  try {
+    const email = normalizarEmail(req.body?.email);
+    const senha = req.body?.senha;
+    const usuario = await loginUsuario(email);
 
-        const usuario = await loginUsuario(email);
-
-        if (!usuario) {
-            return res.status(401).json({
-                error: "Email ou senha incorretos"
-            });
-        }
-
-        const senhaCorreta = await bcrypt.compare(senha, usuario.senha);
-
-        if (!senhaCorreta) {
-            return res.status(401).json({
-                error: "Email ou senha incorretos"
-            });
-        }
-        const token = jwt.sign(
-            {
-                empresaId: usuario._id,
-                email: usuario.email
-            },
-            process.env.JWT_SECRET,
-            {
-                algorithm: "HS256",
-                expiresIn:  "6h"
-            }
-        );
-
-        const usuarioSeguro = { id: usuario._id, nome: usuario.nome, cnpj: usuario.cnpj, email: usuario.email };
-
-        return res.status(200).json({
-            message: "Login realizado com sucesso",
-            usuario: usuarioSeguro,
-            token
-        });
-
-    } catch (error) {
-        console.error("Erro ao realizar login:", error);
-
-        return res.status(500).json({
-            error: "Erro ao realizar login"
-        });
+    if (!usuario || typeof senha !== 'string' || !(await bcrypt.compare(senha, usuario.senha))) {
+      return res.status(401).json({ error: 'Email ou senha incorretos' });
     }
+
+    let empresa = null;
+    if (usuario.papel !== 'admin') {
+      if (!usuario.empresaId) {
+        return res.status(401).json({ error: 'Email ou senha incorretos' });
+      }
+      const dadosEmpresa = await getEmpresa(usuario.empresaId);
+      if (!dadosEmpresa) {
+        return res.status(401).json({ error: 'Email ou senha incorretos' });
+      }
+      empresa = {
+        id: String(dadosEmpresa._id),
+        nome: dadosEmpresa.nome,
+        cnpj: dadosEmpresa.cnpj
+      };
+    }
+
+    const token = jwt.sign(
+      { usuarioId: String(usuario._id) },
+      process.env.JWT_SECRET,
+      { algorithm: 'HS256', expiresIn: '6h' }
+    );
+
+    return res.status(200).json({
+      message: 'Login realizado com sucesso',
+      usuario: {
+        id: String(usuario._id),
+        nome: usuario.nome,
+        email: usuario.email,
+        papel: usuario.papel,
+        empresa
+      },
+      token
+    });
+  } catch (error) {
+    console.error('Erro ao realizar login:', error);
+    return res.status(500).json({ error: 'Erro ao realizar login' });
+  }
+}
+
+export async function buscarUsuarios(req, res) {
+  try {
+    const usuarios = await getUsuarios(req.empresaId);
+    return res.status(200).json(usuarios.map(usuarioSeguro));
+  } catch (error) {
+    console.error('Erro ao obter usuários:', error);
+    return res.status(500).json({ error: 'Erro ao obter usuários' });
+  }
+}
+
+export async function criarUsuario(req, res) {
+  if (!req.body) return res.status(400).json({ error: 'Dados do usuário obrigatórios' });
+  const nome = String(req.body.nome || '').trim();
+  const email = normalizarEmail(req.body.email);
+  const { senha, papel } = req.body;
+
+  if (!nome || !emailValido(email) || typeof senha !== 'string' || senha.length < 8 ||
+      !papelEmpresaValido(papel)) {
+    return res.status(400).json({ error: 'Informe nome, e-mail válido, senha com ao menos 8 caracteres e papel válido' });
+  }
+
+  try {
+    if (await verificarEmailDuplicado(email)) {
+      return res.status(409).json({ error: 'E-mail já cadastrado' });
+    }
+
+    const usuario = await postUsuario({
+      nome,
+      email,
+      senha: await bcrypt.hash(senha, saltRounds),
+      empresaId: req.empresaId,
+      papel
+    });
+    return res.status(201).json(usuarioSeguro(usuario));
+  } catch (error) {
+    if (erroDeDuplicidade(error)) return res.status(409).json({ error: 'E-mail já cadastrado' });
+    console.error('Erro ao criar usuário:', error);
+    return res.status(500).json({ error: 'Erro ao criar usuário' });
+  }
+}
+
+export async function atualizarUsuario(req, res) {
+  if (!req.body) return res.status(400).json({ error: 'Dados do usuário obrigatórios' });
+  const nome = String(req.body.nome || '').trim();
+  const { papel } = req.body;
+  if (!nome || !papelEmpresaValido(papel)) {
+    return res.status(400).json({ error: 'Informe nome e papel válido' });
+  }
+
+  let session;
+  try {
+    session = await mongoose.startSession();
+    let resultado;
+    await session.withTransaction(async () => {
+      await serializarAcessoEmpresa(req.empresaId, session);
+      const usuarioAtual = await getUsuario(req.params.id, req.empresaId, { session });
+      if (!usuarioAtual) {
+        resultado = { status: 404, body: { error: 'Usuário não encontrado' } };
+        return;
+      }
+
+      if (usuarioAtual.papel === 'gestor' && papel !== 'gestor' &&
+          await contarGestores(req.empresaId, { session }) <= 1) {
+        resultado = { status: 409, body: { error: 'A empresa precisa manter ao menos um gestor' } };
+        return;
+      }
+
+      const atualizado = await putUsuario(
+        req.params.id,
+        req.empresaId,
+        { nome, papel },
+        { session }
+      );
+      resultado = atualizado
+        ? { status: 200, body: usuarioSeguro(atualizado) }
+        : { status: 404, body: { error: 'Usuário não encontrado' } };
+    });
+    return res.status(resultado.status).json(resultado.body);
+  } catch (error) {
+    console.error('Erro ao atualizar usuário:', error);
+    return res.status(500).json({ error: 'Erro ao atualizar usuário' });
+  } finally {
+    if (session) await session.endSession();
+  }
+}
+
+export async function apagarUsuario(req, res) {
+  let session;
+  try {
+    session = await mongoose.startSession();
+    let resultado;
+    await session.withTransaction(async () => {
+      await serializarAcessoEmpresa(req.empresaId, session);
+      const usuario = await getUsuario(req.params.id, req.empresaId, { session });
+      if (!usuario) {
+        resultado = { status: 404, body: { error: 'Usuário não encontrado' } };
+        return;
+      }
+      if (String(usuario._id) === req.usuario.id) {
+        resultado = { status: 403, body: { error: 'Você não pode remover a própria conta' } };
+        return;
+      }
+      if (usuario.papel === 'gestor' &&
+          await contarGestores(req.empresaId, { session }) <= 1) {
+        resultado = { status: 409, body: { error: 'A empresa precisa manter ao menos um gestor' } };
+        return;
+      }
+
+      const removido = await deleteUsuario(req.params.id, req.empresaId, { session });
+      resultado = removido
+        ? { status: 200, body: { message: 'Usuário removido com sucesso' } }
+        : { status: 404, body: { error: 'Usuário não encontrado' } };
+    });
+    return res.status(resultado.status).json(resultado.body);
+  } catch (error) {
+    console.error('Erro ao remover usuário:', error);
+    return res.status(500).json({ error: 'Erro ao remover usuário' });
+  } finally {
+    if (session) await session.endSession();
+  }
+}
+
+export async function alterarMinhaSenha(req, res) {
+  if (!req.body) return res.status(400).json({ error: 'Dados da senha obrigatórios' });
+  const { senhaAtual, novaSenha } = req.body;
+  if (typeof senhaAtual !== 'string' || typeof novaSenha !== 'string' || novaSenha.length < 8) {
+    return res.status(400).json({ error: 'Informe a senha atual e uma nova senha com ao menos 8 caracteres' });
+  }
+
+  try {
+    const usuario = await getUsuarioPorId(req.usuario.id);
+    if (!usuario) return res.status(401).json({ error: 'Usuário não encontrado' });
+    if (!(await bcrypt.compare(senhaAtual, usuario.senha))) {
+      return res.status(400).json({ error: 'Senha atual incorreta' });
+    }
+
+    await putSenha(req.usuario.id, await bcrypt.hash(novaSenha, saltRounds));
+    return res.status(200).json({ message: 'Senha alterada com sucesso' });
+  } catch (error) {
+    console.error('Erro ao alterar senha:', error);
+    return res.status(500).json({ error: 'Erro ao alterar senha' });
+  }
 }

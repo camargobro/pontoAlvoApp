@@ -140,6 +140,7 @@
                 <span>Visitas <strong>{{ d.visitas }}</strong></span>
                 <span>Vendas <strong>{{ d.vendas }}</strong></span>
                 <span>Leads <strong>{{ d.leads }}</strong></span>
+                <span>Telemedicina <strong>{{ d.telemedicina }}</strong></span>
               </div>
             </div>
           </div>
@@ -244,6 +245,7 @@
                 <th>Ponto</th>
                 <th>Data</th>
                 <th class="pa-centro">Leads</th>
+                <th class="pa-centro">Telemedicina</th>
                 <th class="pa-centro">Vendas</th>
               </tr>
             </thead>
@@ -255,6 +257,7 @@
                 </td>
                 <td>{{ acao.data }}</td>
                 <td class="pa-centro">{{ acao.leads }}</td>
+                <td class="pa-centro">{{ acao.telemedicina }}</td>
                 <td class="pa-centro">
                   <span class="pa-vendas" :class="`pa-vendas--${acao.nivel}`">{{ acao.vendas }}</span>
                 </td>
@@ -348,7 +351,8 @@ const exemplo = [
 const kpis = [
   { label: 'Total de ações', valor: '128' },
   { label: 'Total de vendas', valor: '342' },
-  { label: 'Total de leads', valor: '1.025' }
+  { label: 'Total de leads', valor: '1.025' },
+  { label: 'Total de telemedicina', valor: '286' }
 ]
 
 const destaquesExemplo = [
@@ -360,7 +364,8 @@ const destaquesExemplo = [
     media: '6,40',
     visitas: '32',
     vendas: '205',
-    leads: '410'
+    leads: '410',
+    telemedicina: '190'
   },
   {
     chave: 'pior',
@@ -370,21 +375,22 @@ const destaquesExemplo = [
     media: '1,25',
     visitas: '28',
     vendas: '35',
-    leads: '120'
+    leads: '120',
+    telemedicina: '24'
   }
 ]
 
 const historicoExemplo = [
-  { ponto: 'Ponto A', endereco: 'Rua Exemplo, 123', data: '30/09/2026', leads: 14, vendas: 8, nivel: 'boa' },
-  { ponto: 'Ponto B', endereco: 'Rua Teste, 78', data: '29/09/2026', leads: 9, vendas: 3, nivel: 'baixa' },
-  { ponto: 'Ponto D', endereco: 'Av. Modelo, 456', data: '29/09/2026', leads: 6, vendas: 0, nivel: 'zero' },
-  { ponto: 'Ponto A', endereco: 'Rua Exemplo, 123', data: '28/09/2026', leads: 11, vendas: 6, nivel: 'boa' }
+  { ponto: 'Ponto A', endereco: 'Rua Exemplo, 123', data: '30/09/2026', leads: 14, telemedicina: 8, vendas: 8, nivel: 'boa' },
+  { ponto: 'Ponto B', endereco: 'Rua Teste, 78', data: '29/09/2026', leads: 9, telemedicina: 4, vendas: 3, nivel: 'baixa' },
+  { ponto: 'Ponto D', endereco: 'Av. Modelo, 456', data: '29/09/2026', leads: 6, telemedicina: 0, vendas: 0, nivel: 'zero' },
+  { ponto: 'Ponto A', endereco: 'Rua Exemplo, 123', data: '28/09/2026', leads: 11, telemedicina: 7, vendas: 6, nivel: 'boa' }
 ]
 
 const funcionalidades = [
   {
     titulo: 'Registro rápido de ações',
-    texto: 'Informe o ponto, a data, os leads e as vendas em poucos campos, direto do celular ou do computador.'
+    texto: 'Informe o ponto, a data, os leads, as vendas e os atendimentos de telemedicina em poucos campos, direto do celular ou do computador.'
   },
   {
     titulo: 'Cadastro de pontos',

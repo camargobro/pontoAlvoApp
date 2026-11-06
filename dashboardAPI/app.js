@@ -10,9 +10,11 @@ import pontosRouter from './routes/pontosRouter.js';
 import acoesRouter from './routes/acoesRouter.js';
 import dashboardRouter from './routes/dashboardRouter.js';
 import usuariosRouter from './routes/usuariosRouter.js';
+import adminRouter from './routes/adminRouter.js';
 var app = express();
 
 conectaDB();
+app.set('trust proxy', 1);
 app.use(logger('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
@@ -27,6 +29,7 @@ app.use('/pontos', pontosRouter);
 app.use('/acoes', acoesRouter);
 app.use('/dashboard', dashboardRouter);
 app.use('/usuario', usuariosRouter);  
+app.use('/admin', adminRouter);
 // catch 404 and forward to error handler
 app.use(function(req, res, next) {
   next(createError(404));
@@ -41,7 +44,7 @@ app.use(function(err, req, res, next) {
 
   // render the error page
  res.status(err.status || 500).json({
-  erro: err.message
+  error: err.message
 });
 });
 

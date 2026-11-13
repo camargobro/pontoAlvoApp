@@ -5,7 +5,7 @@
         <div class="brand-mark" aria-hidden="true"><span></span></div>
         <div class="brand-name">Ponto<span>Alvo</span></div>
         <div class="brand-rule"></div>
-        <p class="brand-copy">Sua operação de vendas externas, em um só lugar.</p>
+        <p class="brand-copy">Sua operação comercial externa, em um só lugar.</p>
         <div class="brand-foot">PONTOALVO <span>•</span> GESTÃO DE CAMPO</div>
       </div>
       <div class="brand-grid" aria-hidden="true"></div>
@@ -19,7 +19,7 @@
           <div :key="isRegister ? 'register-copy' : 'login-copy'">
             <h1>{{ isRegister ? 'Crie a conta de sua empresa' : 'Bem-vindo de volta' }}</h1>
             <p class="auth-intro">
-              {{ isRegister ? 'Comece a acompanhar sua operação.' : 'Acesse sua operação de vendas.' }}
+              {{ isRegister ? 'Comece a acompanhar sua operação.' : 'Acesse sua operação.' }}
             </p>
           </div>
         </Transition>

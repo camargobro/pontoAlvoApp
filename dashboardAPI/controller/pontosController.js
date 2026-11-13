@@ -1,6 +1,6 @@
-
-import { getPontos, postPonto, deletePonto, putPonto } from '../model/modelPonto.js';
+import { getPontos, postPonto, deletePonto, putPonto, getMapaCalor, getPontoById } from '../model/modelPonto.js';
 import { pontoDuplicado } from '../regrasNegocios/regrasNegociosPontos.js';
+import { normalizarCidade, normalizarTipoPonto } from '../regrasNegocios/classificacaoPonto.js';
 
 function camposPontoValidos({ nome, telefone, endereco, bairro, cidade, tipo }) {
     return [nome, telefone, endereco, bairro, cidade, tipo]
@@ -16,13 +16,37 @@ export async function buscarPontos(req, res) {
         res.status(500).json({ error: "Erro ao obter pontos" });
     }
 }
+export async function buscarPontoPorId(req, res) {
+    try {
+        const ponto = await getPontoById(req.params.id, req.empresaId);
+        if (!ponto) {
+            return res.status(404).json({ error: "Ponto não encontrado" });
+        }
+        res.status(200).json(ponto);
+    } catch (error) {
+        console.error("Erro ao obter ponto:", error);
+        res.status(500).json({ error: "Erro ao obter ponto" });
+    }
+}
+
+export async function buscarMapaCalor(req, res) {
+    try {
+        const dados = await getMapaCalor(req.empresaId);
+        res.status(200).json(dados);
+    } catch (error) {
+        console.error("Erro ao obter mapa de calor:", error);
+        res.status(500).json({ error: "Erro ao obter mapa de calor" });
+    }
+}
 
 export async function criarPontos(req, res) {
     try {
         if (!req.body || typeof req.body !== 'object') {
             return res.status(400).json({ error: "Todos os campos são obrigatórios" });
         }
-        const { nome, telefone, endereco, bairro, cidade, tipo } = req.body;
+        const { nome, telefone, endereco, bairro } = req.body;
+        const cidade = normalizarCidade(req.body.cidade);
+        const tipo = normalizarTipoPonto(req.body.tipo);
 
         if (!camposPontoValidos({ nome, telefone, endereco, bairro, cidade, tipo })) {
             return res.status(400).json({ error: "Todos os campos são obrigatórios" });
@@ -65,7 +89,9 @@ export async function atualizarPonto(req, res) {
         if (!req.body || typeof req.body !== 'object') {
             return res.status(400).json({ error: "Todos os campos são obrigatórios" });
         }
-        const { nome, telefone, endereco, bairro, cidade, tipo } = req.body;
+        const { nome, telefone, endereco, bairro } = req.body;
+        const cidade = normalizarCidade(req.body.cidade);
+        const tipo = normalizarTipoPonto(req.body.tipo);
         if (!camposPontoValidos({ nome, telefone, endereco, bairro, cidade, tipo })) {
             return res.status(400).json({ error: "Todos os campos são obrigatórios" });
         }

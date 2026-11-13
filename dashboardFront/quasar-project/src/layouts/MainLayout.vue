@@ -1,7 +1,11 @@
 <template>
   <q-layout view="lHh Lpr lFf" class="pa-layout">
 
-    <q-header v-if="$q.screen.lt.md" bordered class="bg-white text-primary">
+    <q-header
+      v-if="$q.screen.lt.md"
+      bordered
+      :class="$q.dark.isActive ? 'bg-dark text-white' : 'bg-white text-primary'"
+    >
       <q-toolbar>
         <q-btn flat round dense icon="menu" aria-label="Abrir menu" @click="drawer = !drawer" />
         <div class="pa-marca q-ml-sm">Ponto<span>Alvo</span></div>
@@ -14,7 +18,7 @@
       show-if-above
       bordered
       :width="256"
-      class="bg-white"
+      :class="$q.dark.isActive ? 'bg-dark text-white' : 'bg-white'"
     >
       <div class="pa-drawer">
 
@@ -24,35 +28,23 @@
             <circle cx="70" cy="70" r="28" fill="#FFFFFF" />
             <circle cx="70" cy="70" r="18" fill="#FF7A1A" />
             <circle cx="70" cy="70" r="8" fill="#FFFFFF" />
-            <text
-              x="145"
-              y="98"
-              font-family="Poppins, 'Segoe UI', Roboto, Arial, sans-serif"
-              font-size="68"
-              font-weight="700"
-              letter-spacing="-1"
-            >
-              <tspan fill="#0B3C5D">Ponto</tspan><tspan fill="#FF7A1A">Alvo</tspan>
+            <text x="145" y="98" font-family="Poppins, 'Segoe UI', Roboto, Arial, sans-serif" font-size="68"
+              font-weight="700" letter-spacing="-1">
+              <tspan fill="#0B3C5D">Ponto</tspan>
+              <tspan fill="#FF7A1A">Alvo</tspan>
             </text>
           </svg>
         </div>
 
-        <q-list
-          class="pa-menu"
-          :style="{
-            '--pa-indicator-offset': `${Math.max(activeMenuIndex, 0) * 48}px`,
-            '--pa-indicator-opacity': activeMenuIndex < 0 ? 0 : 1
-          }"
-        >
-          <q-item
-            v-for="item in menu"
-            :key="item.path"
-            clickable
-            :active="isActive(item.path)"
-            active-class="pa-nav-ativo"
-            class="pa-nav"
-            @click="go(item.path)"
-          >
+        <q-list class="pa-menu" :style="{
+          '--pa-indicator-offset': `${Math.max(activeMenuIndex, 0) * 48}px`,
+          '--pa-indicator-opacity': activeMenuIndex < 0 ? 0 : 1
+        }">
+          <q-item v-for="item in menu" :key="item.path" clickable :active="isActive(item.path)"
+            active-class="pa-nav-ativo" class="pa-nav" @click="go(item.path)">
+            <q-item-section avatar>
+              <q-icon :name="item.icon" size="20px" />
+            </q-item-section>
             <q-item-section>{{ item.label }}</q-item-section>
           </q-item>
         </q-list>
@@ -61,6 +53,7 @@
           <div class="pa-conta-nome">{{ usuario?.nome || 'Conta conectada' }}</div>
           <div class="pa-conta-cnpj">{{ usuario?.empresa?.nome || 'Administrador' }}</div>
           <div v-if="usuario?.empresa?.cnpj" class="pa-conta-cnpj">CNPJ: {{ usuario.empresa.cnpj }}</div>
+          <q-btn flat round :icon="$q.dark.isActive ? 'light_mode' : 'dark_mode'" @click="alternarTema" />
           <q-item clickable class="pa-nav pa-sair" @click="sair">
             <q-item-section>
               <div class="pa-sair-conteudo">
@@ -82,15 +75,8 @@
       </router-view>
     </q-page-container>
 
-    <ConfirmDialog
-      v-model="dialogSair"
-      icon="logout"
-      title="Sair da conta"
-      message="Você realmente deseja sair?"
-      confirm-label="Sair"
-      intent="danger"
-      @confirm="confirmarSaida"
-    />
+    <ConfirmDialog v-model="dialogSair" icon="logout" title="Sair da conta" message="Você realmente deseja sair?"
+      confirm-label="Sair" intent="danger" @confirm="confirmarSaida" />
 
   </q-layout>
 </template>
@@ -106,6 +92,8 @@ const $q = useQuasar()
 const router = useRouter()
 const route = useRoute()
 
+$q.dark.set(localStorage.getItem('tema-escuro') === 'true')
+
 const drawer = ref(false)
 const dialogSair = ref(false)
 const usuario = getUser()
@@ -113,20 +101,24 @@ const usuario = getUser()
 const menu = computed(() => {
   const itens = temPapel('gestor', 'colaborador')
     ? [
-        { label: 'Home', path: '/app' },
-        { label: 'Ranking', path: '/app/ranking' },
-        { label: 'Registrar ação', path: '/app/criar-acao' },
-        { label: 'Histórico de ações', path: '/app/historico-acoes' },
-        { label: 'Pontos', path: '/app/pontos' }
-      ]
+      { label: 'Home', path: '/app', icon: 'home' },
+      { label: 'Ranking', path: '/app/ranking', icon: 'leaderboard' },
+      { label: 'Registrar ação', path: '/app/criar-acao', icon: 'add_location_alt' },
+      { label: 'Histórico de ações', path: '/app/historico-acoes', icon: 'history' },
+      { label: 'Pontos', path: '/app/pontos', icon: 'place' },
+      { label: 'Mapas', path: '/app/mapas', icon: 'map' }
+    ]
     : []
 
-  if (temPapel('gestor')) itens.push({ label: 'Usuários', path: '/app/usuarios' })
+  if (temPapel('gestor')) itens.push({ label: 'Usuários', path: '/app/usuarios', icon: 'people' })
   return itens
 })
 const activeMenuIndex = computed(() => menu.value.findIndex((item) => route.path === item.path))
-
-function go (path) {
+function alternarTema() {
+  $q.dark.toggle()
+  localStorage.setItem('tema-escuro', $q.dark.isActive)
+}
+function go(path) {
   if (route.path !== path) {
     router.push(path)
   }
@@ -135,16 +127,17 @@ function go (path) {
   }
 }
 
-function isActive (path) {
+function isActive(path) {
   return route.path === path
 }
 
-function sair () {
+function sair() {
   dialogSair.value = true
 }
 
-function confirmarSaida () {
+function confirmarSaida() {
   clearSession()
+  $q.dark.set(false)
   router.replace('/login')
 }
 </script>
@@ -264,6 +257,7 @@ function confirmarSaida () {
 }
 
 @media (prefers-reduced-motion: reduce) {
+
   .pa-menu::before,
   .pa-nav {
     transition: none;

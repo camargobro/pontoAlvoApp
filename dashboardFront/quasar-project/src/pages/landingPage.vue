@@ -34,9 +34,9 @@
       <div class="pa-secao pa-hero-grade">
 
         <div class="pa-reveal">
-          <h1 class="pa-hero-titulo">Descubra quais pontos de venda realmente vendem</h1>
+          <h1 class="pa-hero-titulo">Descubra quais pontos geram mais vidas</h1>
           <p class="pa-hero-texto">
-            Registre cada ação de vendas, compare a média de vendas por visita e decida onde vale a pena voltar.
+            Registre cada ação, compare a média de vidas por visita e decida onde vale a pena voltar.
           </p>
           <div class="pa-hero-acoes">
             <q-btn
@@ -61,7 +61,7 @@
 
         <div class="pa-mock pa-reveal pa-reveal--preview" aria-hidden="true">
           <div class="pa-mock-titulo">Ranking de performance</div>
-          <div class="pa-mock-sub">Média de vendas por visita</div>
+          <div class="pa-mock-sub">Média de vidas por visita</div>
 
           <div v-for="(linha, i) in exemplo" :key="linha.nome" class="pa-mock-linha">
             <span class="pa-mock-pos">{{ i + 1 }}</span>
@@ -103,10 +103,10 @@
       <div class="pa-secao pa-vitrine">
 
         <div class="pa-vitrine-texto pa-reveal">
-          <h2 class="pa-h2">Um painel que mostra onde a venda acontece</h2>
+          <h2 class="pa-h2">Um painel que mostra onde você gera mais vidas</h2>
           <p class="pa-vitrine-paragrafo">
-            Veja em um só lugar o total de ações, de vendas e de leads, e descubra qual ponto tem a melhor
-            e a pior média de vendas por visita.
+            Veja em um só lugar o total de ações, de vidas e de leads, e descubra qual ponto tem a melhor
+            e a pior média de vidas por visita.
           </p>
           <ul class="pa-lista">
             <li v-for="item in beneficiosDashboard" :key="item">{{ item }}</li>
@@ -138,9 +138,9 @@
               </div>
               <div class="pa-destaque-stats">
                 <span>Visitas <strong>{{ d.visitas }}</strong></span>
-                <span>Vendas <strong>{{ d.vendas }}</strong></span>
+                <span>Vidas <strong>{{ d.vendas }}</strong></span>
                 <span>Leads <strong>{{ d.leads }}</strong></span>
-                <span>Telemedicina <strong>{{ d.telemedicina }}</strong></span>
+                <span>Consultas <strong>{{ d.telemedicina }}</strong></span>
               </div>
             </div>
           </div>
@@ -223,7 +223,7 @@
         <div class="pa-vitrine-texto pa-reveal">
           <h2 class="pa-h2">Todo o histórico de ações, do mais recente ao mais antigo</h2>
           <p class="pa-vitrine-paragrafo">
-            Consulte cada ação registrada com ponto, data, leads e vendas. A cor do número de vendas mostra
+            Consulte cada ação registrada com ponto, data, leads e vidas. A cor do número de vidas mostra
             de relance quais ações foram fracas, medianas ou boas.
           </p>
           <ul class="pa-lista">
@@ -233,7 +233,7 @@
 
         <div class="pa-mock pa-reveal pa-reveal--preview" aria-hidden="true">
           <div class="pa-mock-sub pa-hist-legenda">
-            Cor das vendas:
+            Cor das vidas:
             <span class="pa-vendas--zero">0</span>,
             <span class="pa-vendas--baixa">de 1 a 4</span>,
             <span class="pa-vendas--boa">5 ou mais</span>
@@ -245,8 +245,8 @@
                 <th>Ponto</th>
                 <th>Data</th>
                 <th class="pa-centro">Leads</th>
-                <th class="pa-centro">Telemedicina</th>
-                <th class="pa-centro">Vendas</th>
+                <th class="pa-centro">Consultas</th>
+                <th class="pa-centro">Vidas</th>
               </tr>
             </thead>
             <tbody>
@@ -292,7 +292,7 @@
 
     <section class="pa-cta">
       <div class="pa-secao pa-cta-interno pa-reveal">
-        <h2 class="pa-cta-titulo">Pronto para saber onde vender mais?</h2>
+        <h2 class="pa-cta-titulo">Pronto para gerar mais vidas?</h2>
         <div class="pa-hero-acoes">
           <q-btn
             unelevated
@@ -350,9 +350,9 @@ const exemplo = [
 
 const kpis = [
   { label: 'Total de ações', valor: '128' },
-  { label: 'Total de vendas', valor: '342' },
+  { label: 'Total de vidas', valor: '342' },
   { label: 'Total de leads', valor: '1.025' },
-  { label: 'Total de telemedicina', valor: '286' }
+  { label: 'Total de consultas', valor: '286' }
 ]
 
 const destaquesExemplo = [
@@ -390,7 +390,7 @@ const historicoExemplo = [
 const funcionalidades = [
   {
     titulo: 'Registro rápido de ações',
-    texto: 'Informe o ponto, a data, os leads, as vendas e os atendimentos de telemedicina em poucos campos, direto do celular ou do computador.'
+    texto: 'Informe o ponto, a data, os leads, as vidas e as consultas em poucos campos, direto do celular ou do computador.'
   },
   {
     titulo: 'Cadastro de pontos',
@@ -398,11 +398,11 @@ const funcionalidades = [
   },
   {
     titulo: 'Dashboard e ranking',
-    texto: 'Totais de ações, vendas e leads, melhor e pior ponto e o ranking pela média de vendas por visita.'
+    texto: 'Totais de ações, vidas e leads, melhor e pior ponto e o ranking pela média de vidas por visita.'
   },
   {
     titulo: 'Histórico de ações',
-    texto: 'Todas as ações registradas, da mais recente para a mais antiga, com a cor das vendas para leitura rápida.'
+    texto: 'Todas as ações registradas, da mais recente para a mais antiga, com a cor das vidas para leitura rápida.'
   },
   {
     titulo: 'Exportação em planilha',
@@ -415,9 +415,9 @@ const funcionalidades = [
 ]
 
 const beneficiosDashboard = [
-  'Totais de ações, vendas e leads em destaque',
-  'Melhor e pior ponto lado a lado, com visitas, vendas e leads',
-  'Ranking completo ordenado pela média de vendas por visita',
+  'Totais de ações, vidas e leads em destaque',
+  'Melhor e pior ponto lado a lado, com visitas, vidas e leads',
+  'Ranking completo ordenado pela média de vidas por visita',
   'Exportação do ranking em planilha'
 ]
 
@@ -434,8 +434,8 @@ const beneficiosHistorico = [
 ]
 
 const passos = [
-  { titulo: 'Cadastre os pontos', texto: 'Registre os locais onde você faz ações de venda de rua.' },
-  { titulo: 'Registre cada ação', texto: 'A cada visita, informe quantos leads e quantas vendas aconteceram.' },
+  { titulo: 'Cadastre os pontos', texto: 'Registre os locais onde você realiza ações de campo.' },
+  { titulo: 'Registre cada ação', texto: 'A cada visita, informe quantos leads e quantas vidas foram geradas.' },
   { titulo: 'Acompanhe o ranking', texto: 'O painel mostra onde vale voltar e onde vale rever a estratégia.' }
 ]
 

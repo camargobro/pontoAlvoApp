@@ -39,6 +39,178 @@
   transform: translateY(-4px);
 }
 
+body.body--dark {
+  color-scheme: dark;
+}
+
+html body.body--dark .pa-layout {
+  --pa-navy: #DCEAF5;
+  --pa-suave: #A8B4C3;
+}
+
+html body.body--dark .pa-layout .pa-logo,
+html body.body--dark .pa-layout .pa-conta {
+  border-color: #354252;
+}
+
+html body.body--dark .pa-layout .pa-conta-nome,
+html body.body--dark .pa-layout .pa-nav:hover,
+html body.body--dark .pa-layout .pa-nav-ativo {
+  color: var(--pa-navy);
+}
+
+html body.body--dark .pa-layout .pa-nav:hover {
+  background: #273342;
+}
+
+html body.body--dark .pa-layout .pa-nav-ativo {
+  background: rgba(220, 234, 245, 0.12);
+}
+
+html body.body--dark .pa-layout .pa-conta .q-btn {
+  color: var(--pa-suave);
+}
+
+html body.body--dark .pa-page {
+  --pa-navy: #DCEAF5;
+  --pa-orange: #FF9957;
+  --pa-borda: #354252;
+  --pa-suave: #A8B4C3;
+  --pa-bom: #81C784;
+  --pa-ruim: #EF9A9A;
+  --pa-alerta: #FFCA70;
+  background: #121821;
+  color: #E7EDF4;
+}
+
+html body.body--dark .pa-page .pa-card,
+html body.body--dark .pa-dialog,
+html body.body--dark .pa-confirm {
+  border-color: #354252;
+  background: #1B2532;
+  color: #E7EDF4;
+}
+
+html body.body--dark .pa-page .pa-card--tabela .q-table__container,
+html body.body--dark .pa-page .pa-card--tabela .q-table {
+  background: transparent;
+  color: #E7EDF4;
+}
+
+html body.body--dark .pa-page .pa-card--tabela .pa-thead th {
+  background: #222E3C;
+  color: var(--pa-navy);
+}
+
+html body.body--dark .pa-page .pa-card--tabela tbody td {
+  border-color: #354252;
+  color: #E7EDF4;
+}
+
+html body.body--dark .pa-page .pa-card--tabela tbody tr:hover {
+  background: #273342;
+}
+
+html body.body--dark .pa-page .pa-barra {
+  background: #354252;
+}
+
+html body.body--dark .pa-page .pa-quentes {
+  border-color: #354252;
+  background: #1B2532;
+}
+
+html body.body--dark .pa-page .pa-quente-card {
+  border-color: #354252;
+  background: #1B2532;
+}
+
+html body.body--dark .pa-page .pa-quente-metrica {
+  background: #222E3C;
+}
+
+html body.body--dark .pa-page .pa-quente-atraso,
+html body.body--dark .pa-page .pa-quente-metrica--vidas {
+  background: #273342;
+  color: #DCEAF5;
+}
+
+html body.body--dark .pa-page .pa-quentes-vazio {
+  border-color: #354252;
+  color: #A8B4C3;
+}
+
+html body.body--dark .q-dialog .pa-dialog--detalhes,
+html body.body--dark .q-dialog .pa-dialog--quentes {
+  --pa-navy: #DCEAF5;
+  --pa-suave: #A8B4C3;
+  --pa-borda: #354252;
+  background: #1B2532;
+  color: #E7EDF4;
+}
+
+html body.body--dark .q-dialog .pa-dialog--quentes .pa-quente-card {
+  border-color: #354252;
+  background: #1B2532;
+}
+
+html body.body--dark .q-dialog .pa-dialog--quentes .pa-quente-metrica {
+  background: #222E3C;
+}
+
+html body.body--dark .q-dialog .pa-dialog--quentes .pa-quente-atraso,
+html body.body--dark .q-dialog .pa-dialog--quentes .pa-quente-metrica--vidas {
+  background: #273342;
+  color: #DCEAF5;
+}
+
+html body.body--dark .q-dialog .pa-dialog--detalhes .pa-resumo-card {
+  border-color: #354252;
+  background: #222E3C;
+}
+
+html body.body--dark .q-dialog .pa-dialog--detalhes .q-table__container,
+html body.body--dark .q-dialog .pa-dialog--detalhes .q-table {
+  background: transparent;
+  color: #E7EDF4;
+}
+
+html body.body--dark .q-dialog .pa-dialog--detalhes .q-table thead tr,
+html body.body--dark .q-dialog .pa-dialog--detalhes .q-table th {
+  background: #222E3C;
+  color: #DCEAF5;
+}
+
+html body.body--dark .q-dialog .pa-dialog--detalhes .q-table tbody td {
+  border-color: #354252;
+  color: #E7EDF4;
+}
+
+html body.body--dark .q-dialog .pa-dialog--detalhes .q-table tbody tr:hover {
+  background: #273342;
+}
+
+html body.body--dark .pa-page .pa-papel,
+html body.body--dark .pa-page .pa-tipo {
+  background: rgba(220, 234, 245, 0.12);
+  color: var(--pa-navy);
+}
+
+html body.body--dark .pa-confirm__title,
+html body.body--dark .pa-confirm__message {
+  color: #E7EDF4;
+}
+
+html body.body--dark .pa-confirm__actions {
+  border-color: #354252;
+}
+
+html body.body--dark .q-notification.pa-notify {
+  border-color: #354252;
+  background: #1B2532;
+  color: #E7EDF4;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .pa-route-enter-active,
   .pa-route-leave-active {

@@ -6,7 +6,7 @@
 
         <header class="pa-header">
           <h1 class="pa-title">Registrar ação</h1>
-          <p class="pa-subtitle">Informe o ponto, a data e o resultado da ação de vendas</p>
+          <p class="pa-subtitle">Informe o ponto, a data e o resultado da ação</p>
         </header>
 
         <div class="pa-card">
@@ -67,7 +67,7 @@
                 <q-input
                   v-model.number="form.degustacao_tele"
                   :rules="[naoNegativo]"
-                  label="Telemedicina"
+                  label="Consultas"
                   type="number"
                   min="0"
                   lazy-rules
@@ -91,7 +91,7 @@
                 <q-input
                   v-model.number="form.vendas"
                   :rules="[naoNegativo]"
-                  label="Vendas"
+                  label="Vidas"
                   type="number"
                   min="0"
                   lazy-rules
@@ -149,7 +149,18 @@
                     <q-input v-model="novoPonto.bairro" :rules="[obrigatorio]" label="Bairro" lazy-rules outlined />
                   </div>
                   <div class="col-12 col-sm-6">
-                    <q-input v-model="novoPonto.cidade" :rules="[obrigatorio]" label="Cidade" lazy-rules outlined />
+                    <q-select
+                      v-model="novoPonto.cidade"
+                      :options="cidadesDisponiveis"
+                      :rules="[obrigatorio]"
+                      label="Cidade"
+                      lazy-rules
+                      outlined
+                      use-input
+                      hide-selected
+                      fill-input
+                      input-debounce="0"
+                    />
                   </div>
                 </div>
               </q-card-section>
@@ -177,10 +188,58 @@
           <p class="pa-subtitle">Da ação mais recente para a mais antiga</p>
         </header>
 
+        <div class="pa-card pa-filtros-historico">
+          <q-input
+            v-model="filtroHistorico"
+            outlined
+            dense
+            clearable
+            label="Pesquisar no histórico"
+            placeholder="Ponto, bairro, cidade, tipo, endereço..."
+            class="pa-busca-historico"
+          >
+            <template #prepend>
+              <q-icon name="search" />
+            </template>
+          </q-input>
+          <q-input
+            v-model="dataInicial"
+            outlined
+            dense
+            clearable
+            type="date"
+            label="Data inicial"
+            stack-label
+            class="pa-data-historico"
+          />
+          <q-input
+            v-model="dataFinal"
+            outlined
+            dense
+            clearable
+            type="date"
+            label="Data final"
+            stack-label
+            class="pa-data-historico"
+          />
+          <q-btn
+            v-if="filtrosHistoricoAtivos"
+            flat
+            no-caps
+            color="primary"
+            icon="filter_alt_off"
+            label="Limpar filtros"
+            @click="limparFiltrosHistorico"
+          />
+        </div>
+        <div v-if="intervaloDatasInvalido" class="pa-erro-filtro" role="alert">
+          A data inicial deve ser anterior ou igual à data final.
+        </div>
+
         <div class="pa-card pa-card--tabela">
 
           <div class="pa-tabela-topo pa-label">
-            Cor das vendas:
+            Cor das vidas:
             <span class="pa-vendas--zero">0</span>,
             <span class="pa-vendas--baixa">de 1 a 4</span>,
             <span class="pa-vendas--boa">5 ou mais</span>
@@ -188,12 +247,12 @@
 
           <q-table
             v-model:pagination="paginacao"
-            :rows="acoesComNomes"
+            :rows="acoesFiltradas"
             :columns="columns"
             :loading="carregandoAcoes || carregandoPontos"
             :rows-per-page-options="[10, 25, 50, 0]"
             rows-per-page-label="Linhas por página"
-            no-data-label="Nenhuma ação registrada ainda."
+            :no-data-label="mensagemSemAcoes"
             :pagination-label="(inicio, fim, total) => `${inicio}-${fim} de ${total}`"
             table-header-class="pa-thead"
             row-key="_id"
@@ -202,7 +261,9 @@
 
             <template v-slot:body-cell-pontoNome="props">
               <q-td :props="props">
-                <div class="pa-ponto-nome">{{ props.row.pontoNome }}</div>
+                <div class="row items-center no-wrap q-gutter-xs">
+                  <div class="pa-ponto-nome">{{ props.row.pontoNome }}</div>
+                </div>
                 <div class="pa-label">{{ props.row.endereco }}</div>
                 <div class="pa-label">
                   <WhatsAppContact :phone="props.row.telefone" />
@@ -307,7 +368,7 @@
                 <q-input
                   v-model.number="acaoEmEdicao.vendas"
                   :rules="[naoNegativo]"
-                  label="Vendas"
+                  label="Vidas"
                   type="number"
                   min="0"
                   lazy-rules
@@ -318,7 +379,7 @@
                 <q-input
                   v-model.number="acaoEmEdicao.degustacao_tele"
                   :rules="[naoNegativo]"
-                  label="Telemedicina"
+                  label="Consultas"
                   type="number"
                   min="0"
                   lazy-rules
@@ -349,7 +410,7 @@
 </template>
 
 <script setup>
-import { ref, computed, nextTick, onMounted } from 'vue';
+import { ref, computed, nextTick, onMounted, watch } from 'vue';
 import ConfirmDialog from 'src/components/ConfirmDialog.vue';
 import DeleteButton from 'src/components/DeleteButton.vue';
 import EditButton from 'src/components/EditButton.vue';
@@ -359,6 +420,7 @@ import { useRoute } from 'vue-router';
 import { apiFetch } from 'src/services/api';
 import { notificar } from 'src/services/notificacoes';
 import { tiposPonto } from 'src/constants/tiposPonto';
+import { listarCidades, normalizarCidade, normalizarTipoPonto } from 'src/constants/classificacaoPonto';
 import { getUser, temPapel } from 'src/services/auth';
 
 const $q = useQuasar();
@@ -373,6 +435,9 @@ const salvandoEdicaoAcao = ref(false);
 const acaoEmEdicao = ref(criarAcaoVazia());
 const usuarioAtual = getUser();
 const hoje = formatarDataInput(new Date());
+const filtroHistorico = ref('');
+const dataInicial = ref('');
+const dataFinal = ref('');
 const form = ref({ pontoId: '', data: hoje, leads: 0, vendas: 0, degustacao_tele: 0 });
 const formRef = ref(null);
 const addNewPonto = ref(false);
@@ -383,6 +448,7 @@ const carregandoPontos = ref(true);
 const carregandoAcoes = ref(true);
 const filtroPonto = ref('');
 const paginacao = ref({ rowsPerPage: 10 });
+const cidadesDisponiveis = computed(() => listarCidades(pontos.value));
 
 function avisar(tipo, message) {
   notificar($q, tipo, message);
@@ -493,16 +559,76 @@ const acoesComNomes = computed(() => {
   return [...acoesComPonto]
     .sort((a, b) => new Date(b.data) - new Date(a.data))
     .map((acao) => {
-      const ponto = pontos.value.find((p) => p._id === acao.pontoId) || {}
+      const ponto = pontos.value.find((p) => String(p._id) === String(acao.pontoId)) || {}
 
       return {
         ...acao,
         pontoNome: ponto.nome || `ID: ${acao.pontoId}`,
         endereco: ponto.endereco || 'Endereço não encontrado',
         telefone: ponto.telefone || 'Telefone não informado',
+        bairro: ponto.bairro || '',
+        cidade: ponto.cidade || '',
+        tipo: ponto.tipo || '',
       }
     })
 })
+
+const intervaloDatasInvalido = computed(() =>
+  Boolean(dataInicial.value && dataFinal.value && dataInicial.value > dataFinal.value)
+);
+const filtrosHistoricoAtivos = computed(() =>
+  Boolean(filtroHistorico.value.trim() || dataInicial.value || dataFinal.value)
+);
+const mensagemSemAcoes = computed(() =>
+  filtrosHistoricoAtivos.value
+    ? 'Nenhuma ação encontrada para esses filtros.'
+    : 'Nenhuma ação registrada ainda.'
+);
+const acoesFiltradas = computed(() => {
+  if (intervaloDatasInvalido.value) return [];
+
+  const termo = normalizarTexto(filtroHistorico.value);
+
+  return acoesComNomes.value.filter((acao) => {
+    const data = String(acao.data || '').match(/^\d{4}-\d{2}-\d{2}/)?.[0] || '';
+    if (dataInicial.value && (!data || data < dataInicial.value)) return false;
+    if (dataFinal.value && (!data || data > dataFinal.value)) return false;
+    if (!termo) return true;
+
+    const textoBusca = [
+      acao.pontoNome,
+      acao.endereco,
+      acao.telefone,
+      acao.bairro,
+      acao.cidade,
+      acao.tipo,
+      acao.data,
+      acao.leads,
+      acao.vendas,
+      acao.degustacao_tele,
+    ].map(normalizarTexto).join(' ');
+
+    return textoBusca.includes(termo);
+  });
+});
+
+watch([filtroHistorico, dataInicial, dataFinal], () => {
+  paginacao.value.page = 1;
+});
+
+function normalizarTexto(value) {
+  return String(value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLocaleLowerCase('pt-BR')
+    .trim();
+}
+
+function limparFiltrosHistorico() {
+  filtroHistorico.value = '';
+  dataInicial.value = '';
+  dataFinal.value = '';
+}
 
 function formatDate(value) {
   if (!value) return '-';
@@ -546,13 +672,13 @@ const columns = [
   },
   {
     name: 'degustacao_tele',
-    label: 'Telemedicina',
+    label: 'Consultas',
     field: 'degustacao_tele',
     align: 'center',
   },
   {
     name: 'vendas',
-    label: 'Vendas',
+    label: 'Vidas',
     field: 'vendas',
     align: 'center',
   },
@@ -585,7 +711,11 @@ async function salvarNovoPonto() {
     const response = await apiFetch('/pontos', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(novoPonto.value),
+      body: JSON.stringify({
+        ...novoPonto.value,
+        cidade: normalizarCidade(novoPonto.value.cidade),
+        tipo: normalizarTipoPonto(novoPonto.value.tipo),
+      }),
     });
 
     if (!response.ok) {
@@ -783,6 +913,27 @@ onMounted(() => {
   overflow: hidden;
 }
 
+.pa-filtros-historico {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.pa-busca-historico {
+  flex: 1 1 320px;
+}
+
+.pa-data-historico {
+  flex: 0 1 180px;
+}
+
+.pa-erro-filtro {
+  margin: -8px 0 16px;
+  color: var(--pa-ruim);
+  font-size: 0.875rem;
+}
+
 .pa-tabela-topo {
   padding: 16px 24px;
   border-bottom: 1px solid var(--pa-borda);
@@ -836,5 +987,17 @@ onMounted(() => {
   font-size: 0.8125rem;
   color: var(--pa-navy);
   background: #F8FAFC;
+}
+
+@media (max-width: 700px) {
+  .pa-filtros-historico {
+    flex-direction: column;
+  }
+
+  .pa-busca-historico,
+  .pa-data-historico {
+    width: 100%;
+    flex-basis: auto;
+  }
 }
 </style>

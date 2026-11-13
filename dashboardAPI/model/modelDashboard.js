@@ -51,7 +51,8 @@ export async function getRanking(empresaId) {
                     totalVisitas: 0,
                     totalVendas: 0,
                     totalLeads: 0,
-                    totalTelemedicina: 0
+                    totalTelemedicina: 0,
+                    ultimaVisita: null
                 };
             }
 
@@ -59,6 +60,9 @@ export async function getRanking(empresaId) {
             agrupado[pontoIdStr].totalVendas += a.vendas;
             agrupado[pontoIdStr].totalLeads += a.leads;
             agrupado[pontoIdStr].totalTelemedicina += Number(a.degustacao_tele || 0);
+            if (!agrupado[pontoIdStr].ultimaVisita || a.data > agrupado[pontoIdStr].ultimaVisita) {
+                agrupado[pontoIdStr].ultimaVisita = a.data;
+            }
         });
 
         // Transformar em array + calcular médias

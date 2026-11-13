@@ -66,7 +66,9 @@
 
           <template v-slot:body-cell-nome="props">
             <q-td :props="props">
-              <span class="pa-ponto-nome">{{ props.row.nome }}</span>
+              <div class="row items-center no-wrap q-gutter-xs">
+                <span class="pa-ponto-nome">{{ props.row.nome }}</span>
+              </div>
             </q-td>
           </template>
 
@@ -84,6 +86,17 @@
 
           <template v-slot:body-cell-acoes="props">
             <q-td :props="props" class="text-right">
+              <q-btn
+                flat
+                round
+                dense
+                color="primary"
+                icon="visibility"
+                :aria-label="`Ver detalhes de ${props.row.nome}`"
+                @click="abrirDetalhes(props.row)"
+              >
+                <q-tooltip>Ver detalhes e histórico</q-tooltip>
+              </q-btn>
               <EditButton
                 v-if="podeGerenciarPontos"
                 :label="`Editar ${props.row.nome}`"
@@ -144,7 +157,18 @@
                 <q-input v-model="pontoEmEdicao.bairro" :rules="[obrigatorio]" label="Bairro" lazy-rules outlined />
               </div>
               <div class="col-12 col-sm-6">
-                <q-input v-model="pontoEmEdicao.cidade" :rules="[obrigatorio]" label="Cidade" lazy-rules outlined />
+                <q-select
+                  v-model="pontoEmEdicao.cidade"
+                  :options="cidadesDisponiveis"
+                  :rules="[obrigatorio]"
+                  label="Cidade"
+                  lazy-rules
+                  outlined
+                  use-input
+                  hide-selected
+                  fill-input
+                  input-debounce="0"
+                />
               </div>
             </div>
           </q-card-section>
@@ -163,6 +187,79 @@
         </q-form>
       </q-card>
     </q-dialog>
+
+    <q-dialog v-model="dialogDetalhes" @hide="limparDetalhes">
+      <q-card class="pa-dialog pa-dialog--detalhes">
+        <q-card-section class="row items-center q-pb-sm">
+          <div class="pa-secao-titulo">Detalhes do ponto</div>
+          <q-space />
+          <q-btn v-close-popup flat round dense icon="close" aria-label="Fechar detalhes" />
+        </q-card-section>
+
+        <q-inner-loading :showing="carregandoDetalhes">
+          <q-spinner size="40px" color="primary" />
+          <div class="q-mt-sm">Carregando dados do ponto e histórico...</div>
+        </q-inner-loading>
+
+        <q-banner v-if="erroDetalhes" rounded class="bg-red-1 text-negative q-mx-md q-mb-md">
+          {{ erroDetalhes }}
+          <template #action>
+            <q-btn flat no-caps color="negative" label="Tentar novamente" @click="carregarDetalhesPonto" />
+          </template>
+        </q-banner>
+
+        <template v-if="pontoDetalhado && !carregandoDetalhes">
+          <q-card-section class="q-pt-none">
+            <div class="pa-ponto-nome pa-detalhe-nome">{{ pontoDetalhado.nome }}</div>
+            <div class="pa-detalhe-metadados">
+              {{ normalizarTipoPonto(pontoDetalhado.tipo) }} · {{ pontoDetalhado.endereco }}
+            </div>
+            <div class="pa-detalhe-metadados">
+              {{ [pontoDetalhado.bairro, normalizarCidade(pontoDetalhado.cidade)].filter(Boolean).join(', ') }}
+              <span v-if="pontoDetalhado.telefone"> · {{ pontoDetalhado.telefone }}</span>
+            </div>
+          </q-card-section>
+
+          <q-card-section class="q-pt-none">
+            <div class="row q-col-gutter-md">
+              <div class="col-12 col-sm-4">
+                <div class="pa-resumo-card">
+                  <div class="pa-resumo-valor">{{ totalVidasPonto }}</div>
+                  <div class="pa-resumo-label">Vidas no total</div>
+                </div>
+              </div>
+              <div class="col-12 col-sm-4">
+                <div class="pa-resumo-card">
+                  <div class="pa-resumo-valor">{{ mediaVidasPonto }}</div>
+                  <div class="pa-resumo-label">Média de vidas por ação</div>
+                </div>
+              </div>
+              <div class="col-12 col-sm-4">
+                <div class="pa-resumo-card">
+                  <div class="pa-resumo-valor">{{ acoesDoPonto.length }}</div>
+                  <div class="pa-resumo-label">Ações registradas</div>
+                </div>
+              </div>
+            </div>
+          </q-card-section>
+
+          <q-card-section class="q-pt-none">
+            <div class="pa-secao-titulo q-mb-sm">Histórico deste ponto</div>
+            <q-table
+              :rows="acoesDoPonto"
+              :columns="colunasHistoricoPonto"
+              row-key="_id"
+              :rows-per-page-options="[5, 10, 0]"
+              rows-per-page-label="Ações por página"
+              no-data-label="Este ponto ainda não tem ações registradas."
+              :pagination-label="(inicio, fim, total) => `${inicio}-${fim} de ${total}`"
+              flat
+              bordered
+            />
+          </q-card-section>
+        </template>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
@@ -176,6 +273,7 @@ import WhatsAppContact from '../components/WhatsAppContact.vue'
 import { apiFetch } from '../services/api.js'
 import { notificar } from '../services/notificacoes.js'
 import { tiposPonto } from '../constants/tiposPonto.js'
+import { listarCidades, normalizarCidade, normalizarTipoPonto } from '../constants/classificacaoPonto.js'
 import { temPapel } from '../services/auth.js'
 
 const $q = useQuasar()
@@ -187,17 +285,24 @@ const filtro = ref('')
 const dialogExclusao = ref(false)
 const pontoSelecionado = ref(null)
 const dialogPonto = ref(false)
+const dialogDetalhes = ref(false)
 const criandoPonto = ref(false)
 const salvandoPonto = ref(false)
 const pontoEmEdicao = ref(criarPontoVazio())
+const pontoParaDetalhes = ref(null)
+const pontoDetalhado = ref(null)
+const acoesDoPonto = ref([])
+const carregandoDetalhes = ref(false)
+const erroDetalhes = ref('')
+let requisicaoDetalhes = 0
 const paginacao = ref({ sortBy: 'nome', descending: false, rowsPerPage: 10 })
 const podeGerenciarPontos = temPapel('gestor')
 
 const ordenarTexto = (a, b) => String(a || '').localeCompare(String(b || ''), 'pt-BR')
 const tiposPontoDisponiveis = computed(() => {
-  const tipoAtual = pontoEmEdicao.value.tipo
-  return tipoAtual && !tiposPonto.includes(tipoAtual) ? [...tiposPonto, tipoAtual] : tiposPonto
+  return tiposPonto
 })
+const cidadesDisponiveis = computed(() => listarCidades(pontos.value))
 const obrigatorio = (valor) =>
   (typeof valor === 'string' && valor.trim().length > 0) || 'Campo obrigatório'
 
@@ -219,17 +324,105 @@ async function mensagemErroResposta(response, fallback) {
 
 const columns = [
   { name: 'nome', label: 'Nome', field: 'nome', align: 'left', sortable: true, sort: ordenarTexto },
-  { name: 'tipo', label: 'Tipo', field: 'tipo', align: 'left', sortable: true, sort: ordenarTexto },
+  { name: 'tipo', label: 'Tipo', field: 'tipo', align: 'left', sortable: true, sort: ordenarTexto, format: normalizarTipoPonto },
   { name: 'telefone', label: 'Telefone', field: 'telefone', align: 'left', format: (valor) => valor || '—' },
   { name: 'endereco', label: 'Endereço', field: 'endereco', align: 'left' },
   { name: 'bairro', label: 'Bairro', field: 'bairro', align: 'left', sortable: true, sort: ordenarTexto },
-  { name: 'cidade', label: 'Cidade', field: 'cidade', align: 'left', sortable: true, sort: ordenarTexto },
+  { name: 'cidade', label: 'Cidade', field: 'cidade', align: 'left', sortable: true, sort: ordenarTexto, format: normalizarCidade },
   { name: 'acoes', label: '', field: '_id', align: 'right' }
 ]
 
+const totalVidasPonto = computed(() =>
+  acoesDoPonto.value.reduce((total, acao) => total + (Number(acao.vendas) || 0), 0)
+)
+const mediaVidasPonto = computed(() => {
+  if (!acoesDoPonto.value.length) return '0'
+  return (totalVidasPonto.value / acoesDoPonto.value.length).toLocaleString('pt-BR', {
+    maximumFractionDigits: 1,
+  })
+})
+const colunasHistoricoPonto = [
+  {
+    name: 'data',
+    label: 'Data',
+    field: 'data',
+    align: 'left',
+    sortable: true,
+    format: formatarDataHistorico,
+  },
+  { name: 'leads', label: 'Leads', field: 'leads', align: 'center' },
+  { name: 'consultas', label: 'Consultas', field: 'degustacao_tele', align: 'center' },
+  { name: 'vidas', label: 'Vidas', field: 'vendas', align: 'center' },
+]
+
+function formatarDataHistorico(value) {
+  const data = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})/)
+  return data ? `${data[3]}/${data[2]}/${data[1]}` : value || '—'
+}
+
+async function carregarDetalhesPonto() {
+  const ponto = pontoParaDetalhes.value
+  if (!ponto?._id) return
+
+  const idRequisicao = ++requisicaoDetalhes
+  carregandoDetalhes.value = true
+  erroDetalhes.value = ''
+
+  try {
+    const [respostaPonto, respostaAcoes] = await Promise.all([
+      apiFetch(`/pontos/${encodeURIComponent(ponto._id)}`),
+      apiFetch('/acoes'),
+    ])
+    if (!respostaPonto.ok) {
+      throw new Error(await mensagemErroResposta(respostaPonto, 'Não foi possível carregar o ponto'))
+    }
+    if (!respostaAcoes.ok) {
+      throw new Error(await mensagemErroResposta(respostaAcoes, 'Não foi possível carregar o histórico'))
+    }
+
+    const [dadosPonto, todasAcoes] = await Promise.all([
+      respostaPonto.json(),
+      respostaAcoes.json(),
+    ])
+    if (idRequisicao !== requisicaoDetalhes) return
+
+    pontoDetalhado.value = dadosPonto
+    acoesDoPonto.value = todasAcoes
+      .filter((acao) => String(acao.pontoId) === String(dadosPonto._id))
+      .sort((a, b) => String(b.data || '').localeCompare(String(a.data || '')))
+  } catch (error) {
+    if (idRequisicao !== requisicaoDetalhes) return
+    erroDetalhes.value = error.message || 'Não foi possível carregar os detalhes do ponto.'
+    console.error('Erro ao carregar detalhes do ponto:', error)
+  } finally {
+    if (idRequisicao === requisicaoDetalhes) carregandoDetalhes.value = false
+  }
+}
+
+function abrirDetalhes(ponto) {
+  pontoParaDetalhes.value = ponto
+  pontoDetalhado.value = null
+  acoesDoPonto.value = []
+  dialogDetalhes.value = true
+  carregarDetalhesPonto()
+}
+
+function limparDetalhes() {
+  requisicaoDetalhes += 1
+  carregandoDetalhes.value = false
+  pontoParaDetalhes.value = null
+  pontoDetalhado.value = null
+  acoesDoPonto.value = []
+  erroDetalhes.value = ''
+}
+
 function abrirEdicao(ponto) {
   criandoPonto.value = false
-  pontoEmEdicao.value = { ...ponto }
+  pontoEmEdicao.value = {
+    ...ponto,
+    cidade: normalizarCidade(ponto.cidade),
+    tipo: normalizarTipoPonto(ponto.tipo),
+  }
   dialogPonto.value = true
 }
 
@@ -243,7 +436,9 @@ async function salvarPonto() {
   salvandoPonto.value = true
 
   try {
-    const { _id, nome, telefone, endereco, bairro, cidade, tipo } = pontoEmEdicao.value
+    const { _id, nome, telefone, endereco, bairro } = pontoEmEdicao.value
+    const cidade = normalizarCidade(pontoEmEdicao.value.cidade)
+    const tipo = normalizarTipoPonto(pontoEmEdicao.value.tipo)
     const criando = criandoPonto.value
     const response = await apiFetch(criando ? '/pontos' : `/pontos/${_id}`, {
       method: criando ? 'POST' : 'PUT',
@@ -380,6 +575,40 @@ onMounted(() => {
   width: 100%;
   max-width: 560px;
   border-radius: 12px;
+}
+
+.pa-dialog--detalhes {
+  max-width: 880px;
+}
+
+.pa-detalhe-nome {
+  font-size: 1.25rem;
+}
+
+.pa-detalhe-metadados {
+  margin-top: 4px;
+  color: var(--pa-suave);
+}
+
+.pa-resumo-card {
+  height: 100%;
+  padding: 16px;
+  background: #F8FAFC;
+  border: 1px solid var(--pa-borda);
+  border-radius: 10px;
+  text-align: center;
+}
+
+.pa-resumo-valor {
+  color: var(--pa-navy);
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.pa-resumo-label {
+  margin-top: 4px;
+  color: var(--pa-suave);
+  font-size: 0.875rem;
 }
 
 .pa-tabela-topo {

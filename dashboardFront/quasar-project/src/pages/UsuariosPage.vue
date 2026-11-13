@@ -77,11 +77,22 @@
               v-model="form.senha"
               :rules="editando ? [senhaOpcionalValida] : [obrigatorio, senhaValida]"
               :label="editando ? 'Nova senha (opcional)' : 'Senha provisória'"
-              type="password"
+              :type="mostrarSenha ? 'text' : 'password'"
               autocomplete="new-password"
               lazy-rules
               outlined
-            />
+            >
+              <template #append>
+                <q-btn
+                  flat
+                  round
+                  dense
+                  :icon="mostrarSenha ? 'visibility_off' : 'visibility'"
+                  :aria-label="mostrarSenha ? 'Ocultar senha' : 'Mostrar senha'"
+                  @click="mostrarSenha = !mostrarSenha"
+                />
+              </template>
+            </q-input>
             <q-select
               v-model="form.papel"
               :options="papeis"
@@ -136,6 +147,7 @@ const dialogExclusao = ref(false)
 const usuarioSelecionado = ref(null)
 const usuarioAtual = getUser()
 const editando = ref(false)
+const mostrarSenha = ref(false)
 const formRef = ref(null)
 const form = ref(formularioVazio())
 const paginacao = ref({ rowsPerPage: 10 })
@@ -191,12 +203,14 @@ async function carregarUsuarios() {
 
 function abrirCriacao() {
   editando.value = false
+  mostrarSenha.value = false
   form.value = formularioVazio()
   dialogUsuario.value = true
 }
 
 function abrirEdicao(usuario) {
   editando.value = true
+  mostrarSenha.value = false
   form.value = { ...formularioVazio(), ...usuario }
   dialogUsuario.value = true
 }

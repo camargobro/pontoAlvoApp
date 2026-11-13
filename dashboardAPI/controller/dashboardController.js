@@ -1,4 +1,5 @@
 import { getRanking, getResumo } from "../model/modelDashboard.js";
+import { chaveCidade, normalizarCidade, normalizarTipoPonto } from "../regrasNegocios/classificacaoPonto.js";
 import ExcelJS from 'exceljs';
 
 export async function verDashboard(req, res) {
@@ -25,9 +26,11 @@ export async function baixarRankingXlsx(req, res) {
     try {
         const data = await getRanking(req.empresaId);
         const { cidade, tipo } = req.query;
+        const cidadeFiltro = cidade ? chaveCidade(cidade) : '';
+        const tipoFiltro = tipo ? normalizarTipoPonto(tipo) : '';
         const rows = (data.ordenado || []).filter((ponto) =>
-            (!cidade || ponto.cidade === cidade) &&
-            (!tipo || ponto.tipo === tipo)
+            (!cidadeFiltro || chaveCidade(ponto.cidade) === cidadeFiltro) &&
+            (!tipoFiltro || normalizarTipoPonto(ponto.tipo) === tipoFiltro)
         );
 
         const workbook = new ExcelJS.Workbook();
@@ -55,8 +58,8 @@ export async function baixarRankingXlsx(req, res) {
                 telefone: r.telefone,
                 endereco: r.endereco,
                 bairro: r.bairro,
-                cidade: r.cidade,
-                tipo: r.tipo,
+                cidade: normalizarCidade(r.cidade),
+                tipo: normalizarTipoPonto(r.tipo),
                 totalVisitas: r.totalVisitas,
                 totalVendas: r.totalVendas,
                 totalLeads: r.totalLeads,

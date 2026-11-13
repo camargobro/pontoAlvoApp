@@ -3,7 +3,7 @@
     <div class="pa-container">
       <header class="pa-header">
         <h1 class="pa-title">Ranking de performance</h1>
-        <p class="pa-subtitle">Pontos ordenados pela média de vendas por visita</p>
+        <p class="pa-subtitle">Pontos ordenados pela média de vidas por visita</p>
       </header>
 
       <q-banner v-if="erro" rounded class="bg-red-1 text-negative q-mb-lg">
@@ -81,7 +81,21 @@
 
           <template v-slot:body-cell-nome="props">
             <q-td :props="props">
-              <div class="pa-ponto-nome">{{ props.row.nome }}</div>
+              <div class="row items-center no-wrap q-gutter-xs">
+                <div class="pa-ponto-nome">{{ props.row.nome }}</div>
+                <q-btn
+                  flat
+                  round
+                  dense
+                  size="sm"
+                  color="primary"
+                  icon="visibility"
+                  :aria-label="`Ver detalhes de ${props.row.nome}`"
+                  @click="abrirDetalhesPonto(props.row)"
+                >
+                  <q-tooltip>Ver detalhes e histórico</q-tooltip>
+                </q-btn>
+              </div>
               <div class="pa-label">{{ props.row.endereco }}</div>
               <div class="pa-label">
                 <WhatsAppContact :phone="props.row.telefone" />
@@ -102,6 +116,79 @@
         </q-table>
       </div>
     </div>
+
+    <q-dialog v-model="dialogDetalhes" @hide="limparDetalhes">
+      <q-card class="pa-dialog pa-dialog--detalhes">
+        <q-card-section class="row items-center q-pb-sm">
+          <div class="pa-secao-titulo">Detalhes do ponto</div>
+          <q-space />
+          <q-btn v-close-popup flat round dense icon="close" aria-label="Fechar detalhes" />
+        </q-card-section>
+
+        <q-inner-loading :showing="carregandoDetalhes">
+          <q-spinner size="40px" color="primary" />
+          <div class="q-mt-sm">Carregando dados do ponto e histórico...</div>
+        </q-inner-loading>
+
+        <q-banner v-if="erroDetalhes" rounded class="bg-red-1 text-negative q-mx-md q-mb-md">
+          {{ erroDetalhes }}
+          <template #action>
+            <q-btn flat no-caps color="negative" label="Tentar novamente" @click="carregarDetalhesPonto" />
+          </template>
+        </q-banner>
+
+        <template v-if="pontoDetalhado && !carregandoDetalhes">
+          <q-card-section class="q-pt-none">
+            <div class="pa-ponto-nome pa-detalhe-nome">{{ pontoDetalhado.nome }}</div>
+            <div class="pa-detalhe-metadados">
+              {{ normalizarTipoPonto(pontoDetalhado.tipo) }} · {{ pontoDetalhado.endereco }}
+            </div>
+            <div class="pa-detalhe-metadados">
+              {{ [pontoDetalhado.bairro, normalizarCidade(pontoDetalhado.cidade)].filter(Boolean).join(', ') }}
+              <span v-if="pontoDetalhado.telefone"> · {{ pontoDetalhado.telefone }}</span>
+            </div>
+          </q-card-section>
+
+          <q-card-section class="q-pt-none">
+            <div class="row q-col-gutter-md">
+              <div class="col-12 col-sm-4">
+                <div class="pa-resumo-card">
+                  <div class="pa-resumo-valor">{{ totalVidasPonto }}</div>
+                  <div class="pa-resumo-label">Vidas no total</div>
+                </div>
+              </div>
+              <div class="col-12 col-sm-4">
+                <div class="pa-resumo-card">
+                  <div class="pa-resumo-valor">{{ mediaVidasPonto }}</div>
+                  <div class="pa-resumo-label">Média de vidas por ação</div>
+                </div>
+              </div>
+              <div class="col-12 col-sm-4">
+                <div class="pa-resumo-card">
+                  <div class="pa-resumo-valor">{{ acoesDoPonto.length }}</div>
+                  <div class="pa-resumo-label">Ações registradas</div>
+                </div>
+              </div>
+            </div>
+          </q-card-section>
+
+          <q-card-section class="q-pt-none">
+            <div class="pa-secao-titulo q-mb-sm">Histórico deste ponto</div>
+            <q-table
+              :rows="acoesDoPonto"
+              :columns="colunasHistoricoPonto"
+              row-key="_id"
+              :rows-per-page-options="[5, 10, 0]"
+              rows-per-page-label="Ações por página"
+              no-data-label="Este ponto ainda não tem ações registradas."
+              :pagination-label="(inicio, fim, total) => `${inicio}-${fim} de ${total}`"
+              flat
+              bordered
+            />
+          </q-card-section>
+        </template>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
@@ -109,6 +196,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { apiFetch } from 'src/services/api'
 import { tiposPonto } from 'src/constants/tiposPonto'
+import { chaveCidade, listarCidades, normalizarCidade, normalizarTipoPonto } from 'src/constants/classificacaoPonto'
 import { notificar } from 'src/services/notificacoes'
 import { useQuasar } from 'quasar'
 import WhatsAppContact from 'src/components/WhatsAppContact.vue'
@@ -124,22 +212,21 @@ const cidadeSelecionada = ref(null)
 const tipoSelecionado = ref(null)
 const pagination = ref({ rowsPerPage: 10 })
 const podeExportar = temPapel('gestor')
+const dialogDetalhes = ref(false)
+const pontoSelecionadoDetalhes = ref(null)
+const pontoDetalhado = ref(null)
+const acoesDoPonto = ref([])
+const carregandoDetalhes = ref(false)
+const erroDetalhes = ref('')
+let requisicaoDetalhes = 0
 
-const cidades = computed(() =>
-  [...new Set(ranking.value.map((ponto) => ponto.cidade).filter(Boolean))]
-    .sort((a, b) => a.localeCompare(b, 'pt-BR'))
-)
-
-const tipos = computed(() => {
-  const tiposExistentes = ranking.value.map((ponto) => ponto.tipo).filter(Boolean)
-  return [...new Set([...tiposPonto, ...tiposExistentes])]
-    .sort((a, b) => a.localeCompare(b, 'pt-BR'))
-})
+const cidades = computed(() => listarCidades(ranking.value))
+const tipos = tiposPonto
 
 const rankingFiltrado = computed(() => {
   const filtrado = ranking.value.filter((ponto) =>
-    (!cidadeSelecionada.value || ponto.cidade === cidadeSelecionada.value) &&
-    (!tipoSelecionado.value || ponto.tipo === tipoSelecionado.value)
+    (!cidadeSelecionada.value || chaveCidade(ponto.cidade) === chaveCidade(cidadeSelecionada.value)) &&
+    (!tipoSelecionado.value || normalizarTipoPonto(ponto.tipo) === tipoSelecionado.value)
   )
 
   return filtrado.map((ponto, index) => ({ ...ponto, pos: index + 1 }))
@@ -155,10 +242,94 @@ const columns = [
   { name: 'cidade', label: 'Cidade', field: 'cidade', align: 'left' },
   { name: 'tipo', label: 'Tipo', field: 'tipo', align: 'left' },
   { name: 'visitas', label: 'Visitas', field: 'visitas', align: 'center' },
-  { name: 'mediaVendas', label: 'Média vendas', field: 'mediaVendas', align: 'left' },
+  { name: 'mediaVendas', label: 'Média de vidas', field: 'mediaVendas', align: 'left' },
   { name: 'mediaLeads', label: 'Média leads', field: 'mediaLeads', align: 'center', format: formatarDecimal },
-  { name: 'mediaTelemedicina', label: 'Média telemedicina', field: 'mediaTelemedicina', align: 'center', format: formatarDecimal },
+  { name: 'mediaTelemedicina', label: 'Média de consultas', field: 'mediaTelemedicina', align: 'center', format: formatarDecimal },
 ]
+
+const totalVidasPonto = computed(() =>
+  acoesDoPonto.value.reduce((total, acao) => total + (Number(acao.vendas) || 0), 0)
+)
+const mediaVidasPonto = computed(() => {
+  if (!acoesDoPonto.value.length) return '0'
+  return (totalVidasPonto.value / acoesDoPonto.value.length).toLocaleString('pt-BR', {
+    maximumFractionDigits: 1,
+  })
+})
+const colunasHistoricoPonto = [
+  {
+    name: 'data',
+    label: 'Data',
+    field: 'data',
+    align: 'left',
+    sortable: true,
+    format: formatarDataHistorico,
+  },
+  { name: 'leads', label: 'Leads', field: 'leads', align: 'center' },
+  { name: 'consultas', label: 'Consultas', field: 'degustacao_tele', align: 'center' },
+  { name: 'vidas', label: 'Vidas', field: 'vendas', align: 'center' },
+]
+
+function formatarDataHistorico(value) {
+  const data = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})/)
+  return data ? `${data[3]}/${data[2]}/${data[1]}` : value || '—'
+}
+
+async function carregarDetalhesPonto() {
+  const ponto = pontoSelecionadoDetalhes.value
+  if (!ponto?.pontoId) return
+
+  const idRequisicao = ++requisicaoDetalhes
+  carregandoDetalhes.value = true
+  erroDetalhes.value = ''
+
+  try {
+    const [respostaPonto, respostaAcoes] = await Promise.all([
+      apiFetch(`/pontos/${encodeURIComponent(ponto.pontoId)}`),
+      apiFetch('/acoes'),
+    ])
+    if (!respostaPonto.ok) {
+      throw new Error(await mensagemErroResposta(respostaPonto, 'Não foi possível carregar o ponto'))
+    }
+    if (!respostaAcoes.ok) {
+      throw new Error(await mensagemErroResposta(respostaAcoes, 'Não foi possível carregar o histórico'))
+    }
+
+    const [dadosPonto, todasAcoes] = await Promise.all([
+      respostaPonto.json(),
+      respostaAcoes.json(),
+    ])
+    if (idRequisicao !== requisicaoDetalhes) return
+
+    pontoDetalhado.value = dadosPonto
+    acoesDoPonto.value = todasAcoes
+      .filter((acao) => String(acao.pontoId) === String(dadosPonto._id))
+      .sort((a, b) => String(b.data || '').localeCompare(String(a.data || '')))
+  } catch (error) {
+    if (idRequisicao !== requisicaoDetalhes) return
+    erroDetalhes.value = error.message || 'Não foi possível carregar os detalhes do ponto.'
+    console.error('Erro ao carregar detalhes do ponto:', error)
+  } finally {
+    if (idRequisicao === requisicaoDetalhes) carregandoDetalhes.value = false
+  }
+}
+
+function abrirDetalhesPonto(ponto) {
+  pontoSelecionadoDetalhes.value = ponto
+  pontoDetalhado.value = null
+  acoesDoPonto.value = []
+  dialogDetalhes.value = true
+  carregarDetalhesPonto()
+}
+
+function limparDetalhes() {
+  requisicaoDetalhes += 1
+  carregandoDetalhes.value = false
+  pontoSelecionadoDetalhes.value = null
+  pontoDetalhado.value = null
+  acoesDoPonto.value = []
+  erroDetalhes.value = ''
+}
 
 function formatarDecimal(valor) {
   return Number(valor || 0).toLocaleString('pt-BR', {
@@ -188,8 +359,9 @@ async function carregarRanking() {
       nome: ponto.nome,
       endereco: ponto.endereco || 'Endereço não informado',
       telefone: ponto.telefone || 'Telefone não informado',
-      cidade: ponto.cidade || '',
-      tipo: ponto.tipo || '',
+      cidade: normalizarCidade(ponto.cidade),
+      bairro: ponto.bairro || '',
+      tipo: normalizarTipoPonto(ponto.tipo),
       visitas: ponto.totalVisitas,
       mediaVendas: Math.round(ponto.mediaVendas * 100) / 100,
       mediaLeads: Math.round(ponto.mediaLeads * 100) / 100,
@@ -312,6 +484,42 @@ onMounted(carregarRanking)
 
 .pa-card--tabela {
   overflow: hidden;
+}
+
+.pa-dialog {
+  width: 100%;
+  max-width: 880px;
+  border-radius: 12px;
+}
+
+.pa-detalhe-nome {
+  font-size: 1.25rem;
+}
+
+.pa-detalhe-metadados {
+  margin-top: 4px;
+  color: var(--pa-suave);
+}
+
+.pa-resumo-card {
+  height: 100%;
+  padding: 16px;
+  background: #F8FAFC;
+  border: 1px solid var(--pa-borda);
+  border-radius: 10px;
+  text-align: center;
+}
+
+.pa-resumo-valor {
+  color: var(--pa-navy);
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.pa-resumo-label {
+  margin-top: 4px;
+  color: var(--pa-suave);
+  font-size: 0.875rem;
 }
 
 .pa-tabela-topo {

@@ -102,10 +102,11 @@ const menu = computed(() => {
   const itens = temPapel('gestor', 'colaborador')
     ? [
       { label: 'Home', path: '/app', icon: 'home' },
-      { label: 'Ranking', path: '/app/ranking', icon: 'leaderboard' },
       { label: 'Registrar ação', path: '/app/criar-acao', icon: 'add_location_alt' },
-      { label: 'Histórico de ações', path: '/app/historico-acoes', icon: 'history' },
+      { label: 'Histórico de ações', path: '/app/historico-acoes', icon: 'history' }, 
+      { label: 'Ranking', path: '/app/ranking', icon: 'leaderboard' },
       { label: 'Pontos', path: '/app/pontos', icon: 'place' },
+      { label: 'Calendários', path: '/app/calendarios', icon: 'calendar_month' },
       { label: 'Mapas', path: '/app/mapas', icon: 'map' }
     ]
     : []

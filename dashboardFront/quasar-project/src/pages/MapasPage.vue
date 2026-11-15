@@ -75,6 +75,79 @@
         </p>
       </div>
     </div>
+
+    <q-dialog v-model="dialogDetalhes" @hide="limparDetalhes">
+      <q-card class="pa-dialog pa-dialog--detalhes">
+        <q-card-section class="row items-center q-pb-sm">
+          <div class="pa-secao-titulo">Detalhes do ponto</div>
+          <q-space />
+          <q-btn v-close-popup flat round dense icon="close" aria-label="Fechar detalhes" />
+        </q-card-section>
+
+        <q-inner-loading :showing="carregandoDetalhes">
+          <q-spinner size="40px" color="primary" />
+          <div class="q-mt-sm">Carregando dados do ponto e histórico...</div>
+        </q-inner-loading>
+
+        <q-banner v-if="erroDetalhes" rounded class="bg-red-1 text-negative q-mx-md q-mb-md">
+          {{ erroDetalhes }}
+          <template #action>
+            <q-btn flat no-caps color="negative" label="Tentar novamente" @click="carregarDetalhesPonto" />
+          </template>
+        </q-banner>
+
+        <template v-if="pontoDetalhado && !carregandoDetalhes">
+          <q-card-section class="q-pt-none">
+            <div class="pa-ponto-nome pa-detalhe-nome">{{ pontoDetalhado.nome }}</div>
+            <div class="pa-detalhe-metadados">
+              {{ normalizarTipoPonto(pontoDetalhado.tipo) }} · {{ pontoDetalhado.endereco }}
+            </div>
+            <div class="pa-detalhe-metadados">
+              {{ [pontoDetalhado.bairro, normalizarCidade(pontoDetalhado.cidade)].filter(Boolean).join(', ') }}
+              <span v-if="pontoDetalhado.telefone"> · {{ pontoDetalhado.telefone }}</span>
+            </div>
+          </q-card-section>
+
+          <q-card-section class="q-pt-none">
+            <div class="row q-col-gutter-md">
+              <div class="col-12 col-sm-4">
+                <div class="pa-resumo-card">
+                  <div class="pa-resumo-valor">{{ totalVidasPonto }}</div>
+                  <div class="pa-resumo-label">Vidas no total</div>
+                </div>
+              </div>
+              <div class="col-12 col-sm-4">
+                <div class="pa-resumo-card">
+                  <div class="pa-resumo-valor">{{ mediaVidasPonto }}</div>
+                  <div class="pa-resumo-label">Média de vidas por ação</div>
+                </div>
+              </div>
+              <div class="col-12 col-sm-4">
+                <div class="pa-resumo-card">
+                  <div class="pa-resumo-valor">{{ acoesDoPonto.length }}</div>
+                  <div class="pa-resumo-label">Ações registradas</div>
+                </div>
+              </div>
+            </div>
+          </q-card-section>
+
+          <q-card-section class="q-pt-none">
+            <div class="pa-secao-titulo q-mb-sm">Histórico deste ponto</div>
+            <q-table
+              :rows="acoesDoPonto"
+              :columns="colunasHistoricoPonto"
+              row-key="_id"
+              :rows-per-page-options="[5, 10, 0]"
+              rows-per-page-label="Ações por página"
+              no-data-label="Este ponto ainda não tem ações registradas."
+              :pagination-label="(inicio, fim, total) => `${inicio}-${fim} de ${total}`"
+              flat
+              bordered
+            />
+          </q-card-section>
+        </template>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
@@ -84,7 +157,7 @@ import L from 'leaflet'
 import { HeatLayer } from 'leaflet.heat'
 import 'leaflet/dist/leaflet.css'
 import { apiFetch } from 'src/services/api'
-import { cidadesMapa, chaveCidade } from 'src/constants/classificacaoPonto'
+import { cidadesMapa, chaveCidade, normalizarCidade, normalizarTipoPonto } from 'src/constants/classificacaoPonto'
 
 const cidades = cidadesMapa
 
@@ -93,9 +166,16 @@ const mapaElemento = ref(null)
 const pontos = ref([])
 const carregando = ref(false)
 const erro = ref('')
+const dialogDetalhes = ref(false)
+const pontoSelecionadoDetalhes = ref(null)
+const pontoDetalhado = ref(null)
+const acoesDoPonto = ref([])
+const carregandoDetalhes = ref(false)
+const erroDetalhes = ref('')
 let mapa = null
 let camadaCalor = null
 let marcadores = null
+let requisicaoDetalhes = 0
 
 const todasSelecionadas = computed(() => cidadesSelecionadas.value.length === cidades.length)
 const resumoSelecao = computed(() => {
@@ -106,13 +186,109 @@ const resumoSelecao = computed(() => {
 })
 
 const pontosVisiveis = computed(() => {
-  const cidadesAlvo = new Set(cidadesSelecionadas.value.map(normalizarCidade))
+  const cidadesAlvo = new Set(cidadesSelecionadas.value.map(chaveCidade))
   return pontos.value.filter((ponto) =>
     Number.isFinite(ponto.lat) &&
     Number.isFinite(ponto.lng) &&
-    cidadesAlvo.has(normalizarCidade(ponto.cidade))
+    cidadesAlvo.has(chaveCidade(ponto.cidade))
   )
 })
+
+const totalVidasPonto = computed(() =>
+  acoesDoPonto.value.reduce((total, acao) => total + (Number(acao.vendas) || 0), 0)
+)
+const mediaVidasPonto = computed(() => {
+  if (!acoesDoPonto.value.length) return '0'
+  return (totalVidasPonto.value / acoesDoPonto.value.length).toLocaleString('pt-BR', {
+    maximumFractionDigits: 1
+  })
+})
+const colunasHistoricoPonto = [
+  {
+    name: 'data',
+    label: 'Data',
+    field: 'data',
+    align: 'left',
+    sortable: true,
+    format: formatarDataHistorico
+  },
+  { name: 'leads', label: 'Leads', field: 'leads', align: 'center' },
+  { name: 'consultas', label: 'Consultas', field: 'degustacao_tele', align: 'center' },
+  { name: 'vidas', label: 'Vidas', field: 'vendas', align: 'center' }
+]
+
+function formatarDataHistorico(value) {
+  const data = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})/)
+  return data ? `${data[3]}/${data[2]}/${data[1]}` : value || '—'
+}
+
+async function mensagemErroResposta(response, fallback) {
+  let body = null
+  try {
+    body = await response.clone().json()
+  } catch {
+    // A API pode responder com texto ou sem conteúdo.
+  }
+
+  return body?.error || body?.erro || body?.message ||
+    `${fallback} (HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ''}).`
+}
+
+async function carregarDetalhesPonto() {
+  const ponto = pontoSelecionadoDetalhes.value
+  if (!ponto?.id) return
+
+  const idRequisicao = ++requisicaoDetalhes
+  carregandoDetalhes.value = true
+  erroDetalhes.value = ''
+
+  try {
+    const [respostaPonto, respostaAcoes] = await Promise.all([
+      apiFetch(`/pontos/${encodeURIComponent(ponto.id)}`),
+      apiFetch('/acoes')
+    ])
+    if (!respostaPonto.ok) {
+      throw new Error(await mensagemErroResposta(respostaPonto, 'Não foi possível carregar o ponto'))
+    }
+    if (!respostaAcoes.ok) {
+      throw new Error(await mensagemErroResposta(respostaAcoes, 'Não foi possível carregar o histórico'))
+    }
+
+    const [dadosPonto, todasAcoes] = await Promise.all([
+      respostaPonto.json(),
+      respostaAcoes.json()
+    ])
+    if (idRequisicao !== requisicaoDetalhes) return
+
+    pontoDetalhado.value = dadosPonto
+    acoesDoPonto.value = todasAcoes
+      .filter((acao) => String(acao.pontoId) === String(dadosPonto._id))
+      .sort((a, b) => String(b.data || '').localeCompare(String(a.data || '')))
+  } catch (error) {
+    if (idRequisicao !== requisicaoDetalhes) return
+    erroDetalhes.value = error.message || 'Não foi possível carregar os detalhes do ponto.'
+    console.error('Erro ao carregar detalhes do ponto:', error)
+  } finally {
+    if (idRequisicao === requisicaoDetalhes) carregandoDetalhes.value = false
+  }
+}
+
+function abrirDetalhesPonto(ponto) {
+  pontoSelecionadoDetalhes.value = ponto
+  pontoDetalhado.value = null
+  acoesDoPonto.value = []
+  dialogDetalhes.value = true
+  carregarDetalhesPonto()
+}
+
+function limparDetalhes() {
+  requisicaoDetalhes += 1
+  carregandoDetalhes.value = false
+  pontoSelecionadoDetalhes.value = null
+  pontoDetalhado.value = null
+  acoesDoPonto.value = []
+  erroDetalhes.value = ''
+}
 
 function alternarCidade(cidade) {
   if (cidadesSelecionadas.value.includes(cidade)) {
@@ -125,10 +301,6 @@ function alternarCidade(cidade) {
 
 function alternarTodasCidades() {
   cidadesSelecionadas.value = todasSelecionadas.value ? [] : [...cidades]
-}
-
-function normalizarCidade(valor) {
-  return chaveCidade(valor)
 }
 
 function atualizarCamadas() {
@@ -182,6 +354,7 @@ function atualizarCamadas() {
       `<strong>${escaparHtml(ponto.nome)}</strong><br>${ponto.visitas} ${ponto.visitas === 1 ? 'visita' : 'visitas'}`,
       { direction: 'top', offset: [0, -6] }
     )
+    marcador.on('click', () => abrirDetalhesPonto(ponto))
     marcador.addTo(marcadores)
   }
 
@@ -459,6 +632,35 @@ onBeforeUnmount(() => {
 .pa-vazio {
   margin: 16px 0 0;
   color: var(--pa-suave);
+  text-align: center;
+}
+
+.pa-dialog--detalhes {
+  --pa-navy: #0B3C5D;
+  --pa-borda: #E3E8EE;
+}
+
+.pa-detalhe-nome {
+  color: var(--pa-navy);
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: left;
+}
+
+.pa-dialog--detalhes .pa-resumo-card {
+  height: 100%;
+  padding: 16px;
+  border: 1px solid var(--pa-borda);
+  border-radius: 10px;
+  background: #F8FAFC;
+  text-align: center;
+}
+
+.pa-dialog--detalhes .pa-resumo-valor {
+  color: var(--pa-navy);
+  font-size: 1.5rem;
+  font-weight: 700;
   text-align: center;
 }
 
